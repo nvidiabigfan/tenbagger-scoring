@@ -9,9 +9,14 @@ from app.routes.analyze import router as analyze_router
 
 app = FastAPI(title="텐배거스코어링 API", version="0.1.0")
 
+import os
+
+_origins_env = os.getenv("ALLOWED_ORIGINS", "*")
+_origins = ["*"] if _origins_env == "*" else [o.strip() for o in _origins_env.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 배포 시 Vercel 도메인으로 제한
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
