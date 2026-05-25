@@ -1,0 +1,22 @@
+modules:
+  reddit:
+    weight: 30
+    enabled: false   # Phase 1.5 활성화 예정
+
+  youtube:
+    weight: 25
+    enabled: false   # LLM 비용 검증 후 활성화
+
+  etf:
+    weight: 20
+    enabled: true
+
+  analyst:
+    weight: 25
+    enabled: true
+
+scoring:
+  strong_buy_threshold: 75
+  buy_threshold: 55
+  hold_threshold: 35
+  min_confidence: 0.3   # 이 미만이면 no_data 처리
