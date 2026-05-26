@@ -2,7 +2,7 @@ name: Daily Batch
 
 on:
   schedule:
-    - cron: '0 12 * * 1-5'  # UTC 12:00 = KST 21:00, 평일
+    - cron: '0 12 * * 1-5'  # UTC 12:00 = KST 21:00, weekdays
   workflow_dispatch:
     inputs:
       force_reanalysis:
@@ -13,10 +13,6 @@ on:
         description: 'Max stocks to analyze (default 95)'
         required: false
         default: '95'
-
-defaults:
-  run:
-    working-directory: backend
 
 jobs:
   watchlist-reanalysis:
@@ -32,9 +28,11 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
+        working-directory: backend
         run: pip install -r requirements.txt
 
       - name: Run watchlist batch
+        working-directory: backend
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -43,7 +41,6 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         run: python -m app.jobs.watchlist_batch
 
-  # 2단계: 마스터 전체 대량 분석 + 랭킹 스냅샷 (market_cap 상위 95개, YouTube 쿼터 한도 내)
   bulk-analysis:
     name: Bulk Analysis + Ranking Snapshot
     runs-on: ubuntu-latest
@@ -59,9 +56,11 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
+        working-directory: backend
         run: pip install -r requirements.txt
 
       - name: Run bulk analysis + ranking snapshot
+        working-directory: backend
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
