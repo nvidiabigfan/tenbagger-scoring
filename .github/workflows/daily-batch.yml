@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
     inputs:
       force_reanalysis:
-        description: '캐시 무시하고 전체 재분석 (1=강제)'
+        description: 'Skip 24h cache and re-analyze all (1=force)'
         required: false
         default: '0'
       bulk_batch_max:
-        description: '분석할 최대 종목 수 (기본 95)'
+        description: 'Max stocks to analyze (default 95)'
         required: false
         default: '95'
 
