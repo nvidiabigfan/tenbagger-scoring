@@ -75,3 +75,31 @@ def test_duration_recorded(weights_file: Path):
     engine = make_engine(weights_file)
     result = engine.analyze("MSFT")
     assert result.analysis_duration_ms >= 0
+
+
+def test_low_confidence_module_excluded(weights_file: Path):
+    """confidence < min_confidence(0.3) 모듈은 가중평균에서 제외되어야 함."""
+    # etf(weight=20) confidence=0.0 → excluded / analyst(weight=25) confidence=0.5 → included
+    # 결과: analyst 점수만 반영 → 80.0
+    engine = ScoringEngine(
+        analyzers=[
+            DummyAnalyzer("etf", fixed_score=0.0, fixed_confidence=0.0),
+            DummyAnalyzer("analyst", fixed_score=80.0, fixed_confidence=0.5),
+        ],
+        weights_path=weights_file,
+    )
+    result = engine.analyze("AAPL")
+    assert abs(result.total_score - 80.0) < 0.1, f"expected 80.0, got {result.total_score}"
+
+
+def test_all_low_confidence_returns_zero(weights_file: Path):
+    """모든 모듈이 confidence < min_confidence 이면 score=0."""
+    engine = ScoringEngine(
+        analyzers=[
+            DummyAnalyzer("etf", fixed_score=90.0, fixed_confidence=0.0),
+            DummyAnalyzer("analyst", fixed_score=90.0, fixed_confidence=0.1),
+        ],
+        weights_path=weights_file,
+    )
+    result = engine.analyze("AAPL")
+    assert result.total_score == 0.0

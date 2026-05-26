@@ -34,12 +34,20 @@ class ScoringEngine:
             if cfg.get("enabled", False) and name in self._analyzers
         ]
 
+    def _confident_modules(self, results: dict[str, AnalyzerResult], active: list[str]) -> list[str]:
+        """min_confidence 미만 모듈 제외 — 데이터 없는 모듈이 점수를 왜곡하지 않도록."""
+        min_conf = self._scoring_cfg.get("min_confidence", 0.3)
+        return [m for m in active if results[m].confidence >= min_conf]
+
     def _weighted_score(self, results: dict[str, AnalyzerResult], active: list[str]) -> float:
-        total_weight = sum(self._module_cfg[m]["weight"] for m in active)
+        confident = self._confident_modules(results, active)
+        if not confident:
+            return 0.0
+        total_weight = sum(self._module_cfg[m]["weight"] for m in confident)
         if total_weight == 0:
             return 0.0
         weighted_sum = sum(
-            results[m].score * self._module_cfg[m]["weight"] for m in active
+            results[m].score * self._module_cfg[m]["weight"] for m in confident
         )
         return round(weighted_sum / total_weight, 2)
 
