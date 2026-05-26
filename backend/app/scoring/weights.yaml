@@ -1,7 +1,7 @@
 modules:
   reddit:
     weight: 30
-    enabled: false   # Phase 1.5 활성화 예정
+    enabled: true
 
   analyst:
     weight: 30
