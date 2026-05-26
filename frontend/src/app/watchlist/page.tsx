@@ -38,7 +38,8 @@ export default function WatchlistPage() {
   }, []);
 
   const remove = async (ticker: string) => {
-    await supabase.from("watchlist").delete().eq("ticker", ticker);
+    if (!user) return;
+    await supabase.from("watchlist").delete().eq("ticker", ticker).eq("user_id", user.id);
     setItems((prev) => prev.filter((i) => i.ticker !== ticker));
   };
 
