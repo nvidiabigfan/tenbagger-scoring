@@ -44,7 +44,7 @@ export default function AnalyzePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/analyze/${ticker}`, {
+    fetch(`/api/analyze/${ticker}`, {
       method: "POST",
     })
       .then((r) => {
