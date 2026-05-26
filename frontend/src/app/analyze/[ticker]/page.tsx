@@ -31,11 +31,105 @@ const SIGNAL: Record<string, { label: string; cls: string }> = {
   sell:       { label: "부정 시그널", cls: "bg-red-100 text-red-600" },
 };
 
+const MODULE_LABEL: Record<string, string> = {
+  etf:      "ETF 패시브 플로우",
+  analyst:  "애널리스트 컨센서스",
+  youtube:  "YouTube 주목도",
+  trends:   "Google Trends",
+  size:     "시가총액",
+};
+
 function scoreColor(s: number) {
   if (s >= 80) return "text-green-600";
   if (s >= 60) return "text-blue-600";
   if (s >= 40) return "text-yellow-500";
   return "text-red-500";
+}
+
+// evidence 값 포맷
+function fmtEvidence(key: string, val: unknown): string | null {
+  if (val === null || val === undefined) return null;
+  const k = key.toLowerCase();
+  if (typeof val === "number") {
+    if (k.includes("rate")) {
+      const sign = val >= 0 ? "+" : "";
+      return `${sign}${(val * 100).toFixed(1)}%`;
+    }
+    if (k.includes("count") || k.includes("weeks") || k.includes("num")) {
+      return String(Math.round(val));
+    }
+    return val.toFixed(1);
+  }
+  if (typeof val === "boolean") return val ? "예" : "아니오";
+  if (typeof val === "string") return val;
+  return String(val);
+}
+
+// evidence에서 표시할 항목 선별 (error, keyword 등 제외)
+const SKIP_KEYS = new Set(["error", "keyword", "schema_version"]);
+
+function EvidencePanel({ evidence }: { evidence: Record<string, unknown> }) {
+  const [open, setOpen] = useState(false);
+
+  const entries = Object.entries(evidence)
+    .filter(([k, v]) => !SKIP_KEYS.has(k) && v !== null && v !== undefined)
+    .map(([k, v]) => [k, fmtEvidence(k, v)] as [string, string | null])
+    .filter(([, v]) => v !== null) as [string, string][];
+
+  if (entries.length === 0) return null;
+
+  // rate 계열 하이라이트 (trends 변화율)
+  const highlights = entries.filter(([k]) => k.includes("rate") || k === "composite_rate");
+  const rest = entries.filter(([k]) => !k.includes("rate") && k !== "composite_rate");
+
+  const keyLabel = (k: string) =>
+    k
+      .replace(/_/g, " ")
+      .replace(/\b(\w)/g, (c) => c.toUpperCase());
+
+  return (
+    <div className="mt-3 border-t border-gray-100 pt-2">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1 transition-colors"
+      >
+        <span>{open ? "▾" : "▸"}</span>
+        <span>근거 데이터</span>
+      </button>
+
+      {open && (
+        <div className="mt-2 space-y-2">
+          {/* 변화율 하이라이트 */}
+          {highlights.length > 0 && (
+            <div className="grid grid-cols-2 gap-1">
+              {highlights.map(([k, v]) => (
+                <div key={k} className="bg-gray-50 rounded px-2 py-1">
+                  <div className="text-[10px] text-gray-400">{keyLabel(k)}</div>
+                  <div className={`text-xs font-semibold tabular-nums ${
+                    v.startsWith("+") ? "text-green-600" : v.startsWith("-") ? "text-red-500" : "text-gray-700"
+                  }`}>
+                    {v}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 나머지 evidence */}
+          {rest.length > 0 && (
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px]">
+              {rest.map(([k, v]) => (
+                <>
+                  <dt key={`k-${k}`} className="text-gray-400 truncate">{keyLabel(k)}</dt>
+                  <dd key={`v-${k}`} className="text-gray-600 tabular-nums">{v}</dd>
+                </>
+              ))}
+            </dl>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function AnalyzePage() {
@@ -78,9 +172,7 @@ export default function AnalyzePage() {
   };
 
   useEffect(() => {
-    fetch(`/api/analyze/${ticker}`, {
-      method: "POST",
-    })
+    fetch(`/api/analyze/${ticker}`, { method: "POST" })
       .then((r) => {
         if (!r.ok) return r.json().then((e) => Promise.reject(e.detail ?? "분석 실패"));
         return r.json() as Promise<AnalyzeResult>;
@@ -164,11 +256,32 @@ export default function AnalyzePage() {
           return (
             <div key={name} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
               <div className="flex justify-between items-center mb-3">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{name}</span>
+                <div>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{name}</span>
+                  {MODULE_LABEL[name] && (
+                    <div className="text-[10px] text-gray-400 mt-0.5">{MODULE_LABEL[name]}</div>
+                  )}
+                </div>
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ms.cls}`}>{ms.label}</span>
               </div>
               <div className={`text-4xl font-bold ${scoreColor(m.score)}`}>{m.score}</div>
+
+              {/* 점수 바 */}
+              <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    m.score >= 80 ? "bg-green-400" : m.score >= 60 ? "bg-blue-400" : m.score >= 40 ? "bg-yellow-400" : "bg-red-400"
+                  }`}
+                  style={{ width: `${m.score}%` }}
+                />
+              </div>
+
               <div className="text-xs text-gray-400 mt-1">신뢰도 {(m.confidence * 100).toFixed(0)}%</div>
+
+              {/* Evidence 패널 */}
+              {m.evidence && Object.keys(m.evidence).length > 0 && (
+                <EvidencePanel evidence={m.evidence} />
+              )}
             </div>
           );
         })}
@@ -181,6 +294,10 @@ export default function AnalyzePage() {
           {result.report_md}
         </pre>
       </div>
+
+      <p className="text-center text-xs text-gray-300 mt-8">
+        본 서비스는 투자 자문이 아니며 참고용입니다.
+      </p>
     </div>
   );
 }
