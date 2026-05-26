@@ -8,17 +8,19 @@
 """
 
 import logging
+import random
 import time
 from datetime import datetime, timezone
 
 import pandas as pd
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from app.analyzers.base import Analyzer, AnalyzerResult
 
 log = logging.getLogger(__name__)
 
 _TIMEFRAME = "today 1-m"   # 30일 → 마지막 7일 슬라이싱
+_PRE_REQUEST_JITTER = (3.0, 8.0)  # 배치 모드에서 429 방지용 랜덤 대기
 
 
 class TrendsAnalyzer(Analyzer):
@@ -39,8 +41,11 @@ class TrendsAnalyzer(Analyzer):
                 timestamp=datetime.now(timezone.utc),
             )
 
-    def _analyze(self, ticker: str) -> AnalyzerResult:
+    def _analyze(self, ticker: str, pre_sleep: float = 0.0) -> AnalyzerResult:
         from pytrends.request import TrendReq
+
+        if pre_sleep > 0:
+            time.sleep(pre_sleep)
 
         # retries/backoff_factor 파라미터는 urllib3 2.x와 충돌 → 제거, tenacity로 재시도
         pt = TrendReq(hl="en-US", tz=0, timeout=(10, 25))
@@ -97,9 +102,24 @@ class TrendsAnalyzer(Analyzer):
         )
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+def _is_rate_limit(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return "429" in msg or "too many" in msg or "rate" in msg
+
+
+@retry(
+    retry=retry_if_exception(_is_rate_limit),
+    stop=stop_after_attempt(4),
+    wait=wait_exponential(multiplier=2, min=15, max=120),
+    reraise=True,
+)
 def _fetch_interest(pt) -> pd.DataFrame:
     return pt.interest_over_time()
+
+
+def jitter_sleep() -> float:
+    """배치 루프에서 호출 전 랜덤 대기. 반환값을 _analyze(pre_sleep=)에 전달."""
+    return random.uniform(*_PRE_REQUEST_JITTER)
 
 
 def _score_to_signal(score: float) -> str:

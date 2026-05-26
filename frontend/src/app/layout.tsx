@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Link from "next/link";
+import NavAuth from "@/components/NavAuth";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -19,9 +20,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="text-lg font-bold text-gray-900 hover:text-blue-600">
               텐배거스코어링
             </Link>
-            <Link href="/ranking" className="text-sm text-gray-500 hover:text-gray-900">
-              랭킹보드
-            </Link>
+            <div className="flex items-center gap-4">
+              <Link href="/ranking" className="text-sm text-gray-500 hover:text-gray-900">
+                랭킹보드
+              </Link>
+              <NavAuth />
+            </div>
           </div>
         </nav>
         <main className="max-w-4xl mx-auto px-4 py-8">{children}</main>

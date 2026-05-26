@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+import type { User } from "@supabase/supabase-js";
 
 interface ModuleResult {
   score: number;
@@ -42,6 +44,38 @@ export default function AnalyzePage() {
   const [result, setResult] = useState<AnalyzeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+  const [inWatchlist, setInWatchlist] = useState(false);
+  const [wlLoading, setWlLoading] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data }) => {
+      const u = data.session?.user ?? null;
+      setUser(u);
+      if (u && ticker) {
+        const { data: row } = await supabase
+          .from("watchlist")
+          .select("ticker")
+          .eq("user_id", u.id)
+          .eq("ticker", ticker.toUpperCase())
+          .maybeSingle();
+        setInWatchlist(!!row);
+      }
+    });
+  }, [ticker]);
+
+  const toggleWatchlist = async () => {
+    if (!user) { router.push("/login"); return; }
+    setWlLoading(true);
+    if (inWatchlist) {
+      await supabase.from("watchlist").delete().eq("ticker", ticker!.toUpperCase()).eq("user_id", user.id);
+      setInWatchlist(false);
+    } else {
+      await supabase.from("watchlist").upsert({ user_id: user.id, ticker: ticker!.toUpperCase() }, { onConflict: "user_id,ticker", ignoreDuplicates: true });
+      setInWatchlist(true);
+    }
+    setWlLoading(false);
+  };
 
   useEffect(() => {
     fetch(`/api/analyze/${ticker}`, {
@@ -95,7 +129,21 @@ export default function AnalyzePage() {
 
       {/* Score Card */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 mb-6 text-center">
-        <h1 className="text-3xl font-bold text-gray-900 mb-1">{result.ticker}</h1>
+        <div className="flex items-center justify-between mb-1">
+          <h1 className="text-3xl font-bold text-gray-900">{result.ticker}</h1>
+          <button
+            onClick={toggleWatchlist}
+            disabled={wlLoading}
+            className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${
+              inWatchlist
+                ? "border-blue-300 text-blue-600 bg-blue-50 hover:bg-red-50 hover:text-red-500 hover:border-red-200"
+                : "border-gray-200 text-gray-500 hover:border-blue-300 hover:text-blue-600"
+            }`}
+            title={inWatchlist ? "워치리스트에서 제거" : "워치리스트에 추가"}
+          >
+            {inWatchlist ? "★ 추가됨" : "☆ 워치리스트"}
+          </button>
+        </div>
         <div className={`text-8xl font-black my-5 tabular-nums ${scoreColor(result.total_score)}`}>
           {result.total_score}
         </div>
