@@ -17,6 +17,7 @@ from supabase import create_client
 
 from app.analyzers.analyst import AnalystAnalyzer
 from app.analyzers.etf import EtfAnalyzer
+from app.analyzers.reddit import RedditAnalyzer
 from app.analyzers.size import SizeAnalyzer
 from app.analyzers.trends import TrendsAnalyzer, jitter_sleep
 from app.analyzers.youtube import YouTubeAnalyzer
@@ -128,7 +129,7 @@ def run() -> None:
     log.info("watchlist_batch: %d개 종목 / %d개 항목 대상", len(tickers), len(watchlist))
 
     engine = ScoringEngine(
-        [SizeAnalyzer(), EtfAnalyzer(), AnalystAnalyzer(), TrendsAnalyzer(), YouTubeAnalyzer()]
+        [SizeAnalyzer(), EtfAnalyzer(), AnalystAnalyzer(), TrendsAnalyzer(), YouTubeAnalyzer(), RedditAnalyzer()]
     )
 
     ok = fail = cached = 0
