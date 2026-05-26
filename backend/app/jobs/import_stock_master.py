@@ -6,6 +6,7 @@
 """
 
 import io
+import json
 import os
 import logging
 import urllib.request
@@ -21,14 +22,9 @@ SUPABASE_SERVICE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124 Safari/537.36"
 BATCH_SIZE = 100
 
-# ARK ETF 보유종목 CSV (매일 공개)
-ARK_CSV_URLS = {
-    "ARKK": "https://ark-funds.com/wp-content/uploads/funds-etf-csv/ARK_INNOVATION_ETF_ARKK_HOLDINGS.csv",
-    "ARKW": "https://ark-funds.com/wp-content/uploads/funds-etf-csv/ARK_NEXT_GENERATION_INTERNET_ETF_ARKW_HOLDINGS.csv",
-    "ARKG": "https://ark-funds.com/wp-content/uploads/funds-etf-csv/ARK_GENOMIC_REVOLUTION_ETF_ARKG_HOLDINGS.csv",
-    "ARKF": "https://ark-funds.com/wp-content/uploads/funds-etf-csv/ARK_FINTECH_INNOVATION_ETF_ARKF_HOLDINGS.csv",
-    "ARKX": "https://ark-funds.com/wp-content/uploads/funds-etf-csv/ARK_SPACE_EXPLORATION_ETF_ARKX_HOLDINGS.csv",
-}
+# ARK ETF 보유종목 API (arkfunds.io 공개 API)
+ARK_FUNDS = ["ARKK", "ARKW", "ARKG", "ARKF", "ARKX"]
+ARK_API_URL = "https://arkfunds.io/api/v2/etf/holdings?symbol={fund}"
 
 # 큐레이션 성장주: S&P500/NDX100 미포함 종목 중심
 CURATED_STOCKS: list[dict] = [
@@ -138,38 +134,23 @@ def fetch_nasdaq100_rows() -> list[dict]:
 
 
 def fetch_ark_rows() -> list[dict]:
-    """ARK ETF 5종 보유종목 CSV → stocks 행 목록. 실패 시 해당 펀드 스킵."""
+    """ARK ETF 5종 보유종목 → stocks 행 목록 (arkfunds.io 공개 API)."""
     seen: dict[str, dict] = {}
-    for fund, url in ARK_CSV_URLS.items():
+    for fund in ARK_FUNDS:
         try:
+            url = ARK_API_URL.format(fund=fund)
             req = urllib.request.Request(url, headers={"User-Agent": UA})
             with urllib.request.urlopen(req, timeout=20) as resp:
-                raw = resp.read().decode("utf-8")
-            # ARK CSV 첫 줄이 빈 줄이거나 메타 정보일 수 있음 → 헤더 탐색
-            lines = raw.splitlines()
-            header_idx = next(
-                (i for i, l in enumerate(lines) if "ticker" in l.lower()),
-                0,
-            )
-            df = pd.read_csv(io.StringIO("\n".join(lines[header_idx:])))
-            df.columns = [c.strip().strip('"').lower().replace(" ", "_") for c in df.columns]
-            ticker_col = next((c for c in df.columns if c in ("ticker", "symbol")), None)
-            company_col = next((c for c in df.columns if c in ("company", "name", "security")), None)
-            if not ticker_col:
-                log.warning("ARK %s: ticker 컬럼 없음 — 스킵", fund)
-                continue
+                data = json.loads(resp.read())
             count = 0
-            for _, row in df.iterrows():
-                t = str(row[ticker_col]).strip().upper()
-                if not t or t in ("NAN", "-", "") or len(t) > 5:
-                    continue
-                if any(c.isdigit() for c in t):  # 옵션/워런트 제외
+            for h in data.get("holdings", []):
+                t = str(h.get("ticker", "")).strip().upper()
+                if not t or len(t) > 5 or any(c.isdigit() for c in t):
                     continue
                 if t not in seen:
-                    name = str(row[company_col]).strip() if company_col else t
                     seen[t] = {
                         "ticker": t,
-                        "company_name": name,
+                        "company_name": str(h.get("company", t)).strip(),
                         "sector": "Unknown",
                         "industry": None,
                         "market_cap": None,
