@@ -34,10 +34,12 @@ def run(snapshot_date: date | None = None) -> None:
     client = _get_client()
 
     # 1. 종목별 최신 분석 결과 (ticker당 가장 최근 1개)
+    # limit=5000으로 Supabase 기본 1000행 제한 우회
     res = (
         client.table("analysis_results")
         .select("ticker, total_score, analyzed_at")
         .order("analyzed_at", desc=True)
+        .limit(5000)
         .execute()
     )
     if not res.data:
