@@ -20,6 +20,7 @@ from supabase import create_client
 
 from app.analyzers.analyst import AnalystAnalyzer
 from app.analyzers.etf import EtfAnalyzer
+from app.analyzers.size import SizeAnalyzer
 from app.analyzers.trends import TrendsAnalyzer, jitter_sleep
 from app.analyzers.youtube import YouTubeAnalyzer
 from app.db import client as db
@@ -58,7 +59,7 @@ def run() -> None:
     log.info("bulk_analysis_batch: 마스터 %d개, MAX_BATCH=%d", len(all_tickers), MAX_BATCH)
 
     engine = ScoringEngine(
-        [EtfAnalyzer(), AnalystAnalyzer(), TrendsAnalyzer(), YouTubeAnalyzer()]
+        [SizeAnalyzer(), EtfAnalyzer(), AnalystAnalyzer(), TrendsAnalyzer(), YouTubeAnalyzer()]
     )
 
     ok = fail = skipped = 0

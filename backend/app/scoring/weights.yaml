@@ -3,6 +3,10 @@ modules:
     weight: 30
     enabled: false   # Phase 1.5 활성화 예정
 
+  size:
+    weight: 30
+    enabled: true    # 시총 역가중 — 대형주 패널티, 소형주 보너스
+
   youtube:
     weight: 25
     enabled: true
