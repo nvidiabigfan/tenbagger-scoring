@@ -133,6 +133,27 @@ def fetch_nasdaq100_rows() -> list[dict]:
     raise ValueError("나스닥100 테이블 파싱 실패")
 
 
+def fetch_midcap400_rows() -> list[dict]:
+    url = "https://en.wikipedia.org/wiki/List_of_S%26P_400_companies"
+    tables = _read_html_wiki(url)
+    df = next(t for t in tables if "Symbol" in t.columns)
+    rows = []
+    for _, row in df.iterrows():
+        ticker = str(row["Symbol"]).replace(".", "-").strip()
+        industry = row.get("GICS Sub-Industry")
+        rows.append({
+            "ticker": ticker,
+            "company_name": str(row.get("Security", ticker)),
+            "sector": str(row.get("GICS Sector", "Unknown")),
+            "industry": str(industry) if pd.notna(industry) else None,
+            "market_cap": None,
+            "exchange": "NYSE",
+            "logo_url": None,
+            "is_active": True,
+        })
+    return rows
+
+
 def fetch_ark_rows() -> list[dict]:
     """ARK ETF 5종 보유종목 → stocks 행 목록 (arkfunds.io 공개 API)."""
     seen: dict[str, dict] = {}
@@ -209,7 +230,15 @@ def main() -> None:
         total += upsert_batch(client, base_rows[i:i + BATCH_SIZE])
     log.info("S&P500+NDX100 upsert 완료: %d행", total)
 
-    # ── 2. ARK ETF 보유종목 (신규만 INSERT, 기존 레코드 덮어쓰지 않음)
+    # ── 2. S&P MidCap 400 (신규만 INSERT — 섹터 정보 있으므로 ignore_duplicates=False로 upsert)
+    midcap_rows = fetch_midcap400_rows()
+    log.info("미드캡400: %d종목", len(midcap_rows))
+    midcap_new = 0
+    for i in range(0, len(midcap_rows), BATCH_SIZE):
+        midcap_new += upsert_batch(client, midcap_rows[i:i + BATCH_SIZE], ignore_duplicates=True)
+    log.info("미드캡400 upsert 완료: %d행", midcap_new)
+
+    # ── 3. ARK ETF 보유종목 (신규만 INSERT, 기존 레코드 덮어쓰지 않음)
     ark_rows = fetch_ark_rows()
     log.info("ARK 수집: %d종목", len(ark_rows))
     ark_new = 0
@@ -225,7 +254,7 @@ def main() -> None:
         curated_new += upsert_batch(client, curated_rows[i:i + BATCH_SIZE], ignore_duplicates=True)
     log.info("큐레이션 upsert 완료: %d행", curated_new)
 
-    log.info("전체 완료: base=%d + ark=%d + curated=%d", total, ark_new, curated_new)
+    log.info("전체 완료: base=%d + midcap=%d + ark=%d + curated=%d", total, midcap_new, ark_new, curated_new)
 
 
 if __name__ == "__main__":
