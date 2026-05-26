@@ -31,16 +31,30 @@ def get_recent_analysis(ticker: str, hours: int = 24) -> dict | None:
 
 
 def ensure_stock_exists(ticker: str) -> None:
-    """stocks 마스터에 없는 종목을 on-demand로 등록. 이미 있으면 덮어쓰지 않음."""
+    """stocks 마스터에 없는 종목을 on-demand로 등록.
+    이미 섹터가 채워진 종목은 덮어쓰지 않음. Unknown이면 Finviz로 재시도."""
+    from app.core import finviz as _fv
+
+    existing = (
+        _get_client().table("stocks").select("sector").eq("ticker", ticker).maybe_single().execute()
+    )
+    if existing.data and existing.data.get("sector") not in (None, "Unknown"):
+        return  # 이미 정상 데이터 있음
+
+    try:
+        info = _fv.get_stock_info(ticker)
+    except Exception:
+        info = {}
+
     _get_client().table("stocks").upsert(
         {
             "ticker": ticker,
-            "company_name": ticker,
-            "sector": "Unknown",
-            "exchange": "US",
+            "company_name": info.get("company_name", ticker),
+            "sector": info.get("sector", "Unknown"),
+            "industry": info.get("industry"),
+            "exchange": info.get("exchange", "US"),
         },
         on_conflict="ticker",
-        ignore_duplicates=True,
     ).execute()
 
 
