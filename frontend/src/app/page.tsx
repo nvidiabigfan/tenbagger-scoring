@@ -42,7 +42,7 @@ export default function Home() {
     <div className="flex flex-col items-center pt-20">
       <h1 className="text-3xl font-bold text-gray-900 mb-2">텐배거스코어링</h1>
       <p className="text-gray-500 mb-10 text-center text-sm">
-        미국주식 종목을 입력하면 ETF 편입·애널리스트 시그널을 종합한 스코어를 제공합니다
+        Reddit·ETF·애널리스트·Trends·YouTube·시총 6개 모듈로 텐배거 후보 가능성 0~100점
       </p>
 
       <div className="relative w-full max-w-md">
