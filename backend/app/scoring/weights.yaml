@@ -3,25 +3,25 @@ modules:
     weight: 30
     enabled: false   # Phase 1.5 활성화 예정
 
-  size:
+  analyst:
     weight: 30
-    enabled: true    # 시총 역가중 — 대형주 패널티, 소형주 보너스
-
-  youtube:
-    weight: 25
-    enabled: true
+    enabled: true    # 목표가 상승폭 = 텐배거 핵심 선행지표
 
   trends:
+    weight: 25
+    enabled: true    # 52주 관심 증가 추세 = 장기 발굴 신호
+
+  size:
     weight: 20
-    enabled: true
+    enabled: true    # 시총 역가중 — 대형주 패널티, 소형주 보너스
 
   etf:
-    weight: 20
-    enabled: true
+    weight: 15
+    enabled: true    # 기관보유 보조지표
 
-  analyst:
-    weight: 25
-    enabled: true
+  youtube:
+    weight: 10
+    enabled: true    # 단기 버즈 보조지표
 
 scoring:
   strong_buy_threshold: 75
