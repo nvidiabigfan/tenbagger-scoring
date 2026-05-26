@@ -145,6 +145,7 @@ def run() -> None:
         try:
             sleep_s = jitter_sleep()
             log.info("[%s] 분석 시작 (pre-sleep %.1fs)", ticker, sleep_s)
+            time.sleep(sleep_s)  # Trends 429 방지용 종목 전 jitter
             result = engine.analyze(ticker)
             db.save_analysis(result, trigger_source="scheduled")
             new_score = result.total_score
