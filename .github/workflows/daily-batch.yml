@@ -3,7 +3,16 @@ name: Daily Batch
 on:
   schedule:
     - cron: '0 12 * * 1-5'  # UTC 12:00 = KST 21:00, 평일
-  workflow_dispatch:          # 수동 실행 허용
+  workflow_dispatch:
+    inputs:
+      force_reanalysis:
+        description: '캐시 무시하고 전체 재분석 (1=강제)'
+        required: false
+        default: '0'
+      bulk_batch_max:
+        description: '분석할 최대 종목 수 (기본 95)'
+        required: false
+        default: '95'
 
 defaults:
   run:
@@ -58,5 +67,6 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          BULK_BATCH_MAX: '95'
+          BULK_BATCH_MAX: ${{ github.event.inputs.bulk_batch_max || '95' }}
+          FORCE_REANALYSIS: ${{ github.event.inputs.force_reanalysis || '0' }}
         run: python -m app.jobs.bulk_analysis_batch

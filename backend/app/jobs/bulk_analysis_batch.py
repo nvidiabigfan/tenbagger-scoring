@@ -32,6 +32,7 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 MAX_BATCH = int(os.getenv("BULK_BATCH_MAX", "95"))
+FORCE_REANALYSIS = os.getenv("FORCE_REANALYSIS", "0") == "1"
 _INTER_STOCK_SLEEP = 10.0  # 종목 간 대기 (Trends 429 방지)
 
 
@@ -57,7 +58,7 @@ def run() -> None:
         log.warning("bulk_analysis_batch: stocks 마스터 비어 있음 — 스킵")
         return
 
-    log.info("bulk_analysis_batch: 마스터 %d개, MAX_BATCH=%d", len(all_tickers), MAX_BATCH)
+    log.info("bulk_analysis_batch: 마스터 %d개, MAX_BATCH=%d, FORCE=%s", len(all_tickers), MAX_BATCH, FORCE_REANALYSIS)
 
     engine = ScoringEngine(
         [SizeAnalyzer(), EtfAnalyzer(), AnalystAnalyzer(), TrendsAnalyzer(), YouTubeAnalyzer(), RedditAnalyzer()]
@@ -69,7 +70,7 @@ def run() -> None:
             log.info("bulk_analysis_batch: MAX_BATCH(%d) 도달 — 종료", MAX_BATCH)
             break
 
-        if db.get_recent_analysis(ticker):
+        if not FORCE_REANALYSIS and db.get_recent_analysis(ticker):
             skipped += 1
             continue
 
