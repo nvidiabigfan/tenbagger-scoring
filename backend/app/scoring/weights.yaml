@@ -5,7 +5,11 @@ modules:
 
   youtube:
     weight: 25
-    enabled: false   # LLM 비용 검증 후 활성화
+    enabled: true
+
+  trends:
+    weight: 20
+    enabled: true
 
   etf:
     weight: 20
