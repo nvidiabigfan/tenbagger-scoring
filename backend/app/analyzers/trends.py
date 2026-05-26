@@ -42,7 +42,8 @@ class TrendsAnalyzer(Analyzer):
     def _analyze(self, ticker: str) -> AnalyzerResult:
         from pytrends.request import TrendReq
 
-        pt = TrendReq(hl="en-US", tz=0, timeout=(10, 25), retries=2, backoff_factor=0.5)
+        # retries/backoff_factor 파라미터는 urllib3 2.x와 충돌 → 제거, tenacity로 재시도
+        pt = TrendReq(hl="en-US", tz=0, timeout=(10, 25))
         kw = f"{ticker} stock"
         pt.build_payload([kw], timeframe=_TIMEFRAME, geo="US")
         df: pd.DataFrame = _fetch_interest(pt)
