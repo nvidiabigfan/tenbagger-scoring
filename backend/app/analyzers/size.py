@@ -3,7 +3,9 @@
 텐배거 = 아직 덜 발견된 종목의 10배 상승. 시총이 작을수록 상승 여력이 크다.
 대형주(NVIDIA·Apple 등)가 전체 점수를 지배하는 것을 방지하는 핵심 보정 모듈.
 
-점수 기준 (market_cap 기준):
+데이터: Finviz "Market Cap" (예: "3.40T", "18.41B", "540.25M")
+
+점수 기준:
   $2B 미만         : 100  ← 소형주 핵심 텐배거 구간
   $2B  ~ $10B      :  90
   $10B ~ $50B      :  70
@@ -14,12 +16,14 @@
 """
 
 import logging
-
-import yfinance as yf
+import re
 
 from app.analyzers.base import Analyzer, AnalyzerResult
+from app.core import finviz
 
 log = logging.getLogger(__name__)
+
+_SUFFIX = {"K": 1e3, "M": 1e6, "B": 1e9, "T": 1e12}
 
 # (상한 시총(USD), 점수)  — None은 상한 없음
 _TIERS: list[tuple[float | None, float]] = [
@@ -31,6 +35,19 @@ _TIERS: list[tuple[float | None, float]] = [
     (1e12,    8),
     (None,    0),
 ]
+
+
+def _parse_cap(raw: str) -> float | None:
+    """'3.40T' / '18.41B' / '540.25M' → float(USD)."""
+    m = re.fullmatch(r"([\d.]+)([KMBT]?)", raw.strip().upper())
+    if not m:
+        return None
+    try:
+        num = float(m.group(1))
+        suffix = m.group(2)
+        return num * _SUFFIX.get(suffix, 1)
+    except ValueError:
+        return None
 
 
 def _cap_score(market_cap: float) -> float:
@@ -57,15 +74,26 @@ class SizeAnalyzer(Analyzer):
 
     def analyze(self, ticker: str) -> AnalyzerResult:
         try:
-            info = yf.Ticker(ticker).info
-            market_cap = info.get("marketCap")
+            metrics = finviz.get_metrics(ticker)
+            raw = metrics.get("Market Cap")
 
-            if not market_cap:
-                log.warning("[%s] size: marketCap 없음 — confidence 0", ticker)
+            if not raw or raw in ("-", "N/A", ""):
+                log.warning("[%s] size: Market Cap 없음 — confidence 0", ticker)
                 return AnalyzerResult(
-                    score=50.0,  # 정보 없으면 중립 처리
+                    score=50.0,
                     signal="hold",
-                    evidence={"market_cap": None, "note": "데이터 없음"},
+                    evidence={"market_cap_raw": raw, "note": "데이터 없음"},
+                    confidence=0.0,
+                    timestamp=self.now_utc(),
+                )
+
+            market_cap = _parse_cap(raw)
+            if market_cap is None:
+                log.warning("[%s] size: Market Cap 파싱 실패 (%s)", ticker, raw)
+                return AnalyzerResult(
+                    score=50.0,
+                    signal="hold",
+                    evidence={"market_cap_raw": raw, "note": "파싱 실패"},
                     confidence=0.0,
                     timestamp=self.now_utc(),
                 )
@@ -77,9 +105,9 @@ class SizeAnalyzer(Analyzer):
                 score=score,
                 signal=_signal(score),
                 evidence={
-                    "market_cap_usd": market_cap,
-                    "market_cap_b": round(cap_b, 1),
-                    "tier": f"${cap_b:.0f}B",
+                    "market_cap_raw": raw,
+                    "market_cap_b": round(cap_b, 2),
+                    "market_cap_usd": int(market_cap),
                 },
                 confidence=1.0,
                 timestamp=self.now_utc(),
