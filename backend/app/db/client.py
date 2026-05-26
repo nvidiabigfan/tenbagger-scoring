@@ -30,10 +30,25 @@ def get_recent_analysis(ticker: str, hours: int = 24) -> dict | None:
     return res.data[0] if res.data else None
 
 
+def ensure_stock_exists(ticker: str) -> None:
+    """stocks 마스터에 없는 종목을 on-demand로 등록. 이미 있으면 덮어쓰지 않음."""
+    _get_client().table("stocks").upsert(
+        {
+            "ticker": ticker,
+            "company_name": ticker,
+            "sector": "Unknown",
+            "exchange": "US",
+        },
+        on_conflict="ticker",
+        ignore_duplicates=True,
+    ).execute()
+
+
 def save_analysis(
     result: EngineResult, trigger_source: str = "on_demand"
 ) -> tuple[str, str, str]:
     """Returns (analysis_id, analyzed_at_iso, report_md)."""
+    ensure_stock_exists(result.ticker)
     client = _get_client()
     report_md = _build_report(result)
 
