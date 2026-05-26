@@ -77,22 +77,29 @@ def _collect_posts(ticker: str) -> list[dict]:
     headers = {"User-Agent": _USER_AGENT}
     cutoff = time.time() - _SEARCH_WINDOW_DAYS * 86400
     posts = []
+    consecutive_fails = 0
 
     for subreddit in _SUBREDDITS:
         try:
             batch = _fetch_subreddit(ticker, subreddit, headers, cutoff)
             posts.extend(batch)
+            consecutive_fails = 0
             time.sleep(1)
         except Exception as e:
             log.warning("Reddit fetch error [r/%s, %s]: %s", subreddit, ticker, e)
+            consecutive_fails += 1
+            # 연속 2회 실패 시 IP 차단으로 간주, 나머지 서브레딧 스킵
+            if consecutive_fails >= 2:
+                log.warning("Reddit IP block detected for %s — skipping remaining subreddits", ticker)
+                break
 
     return posts
 
 
 @retry(
     retry=retry_if_exception_type(requests.RequestException),
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(min=5, max=30),
+    stop=stop_after_attempt(2),
+    wait=wait_exponential(min=2, max=8),
 )
 def _fetch_subreddit(ticker: str, subreddit: str, headers: dict, cutoff: float) -> list[dict]:
     resp = requests.get(
