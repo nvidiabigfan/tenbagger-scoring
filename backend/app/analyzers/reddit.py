@@ -67,7 +67,8 @@ class RedditAnalyzer(Analyzer):
         post_score = min(50.0, post_count * 5.0)
         upvote_score = min(50.0, math.log10(total_upvotes + 1) * 12.5) if total_upvotes > 0 else 0.0
         score = round(post_score + upvote_score, 2)
-        confidence = 0.85 if post_count >= 5 else (0.6 if post_count >= 1 else 0.3)
+        # post_count=0은 수집 실패(API 차단 등)와 구별 불가 → confidence=0 으로 엔진 제외
+        confidence = 0.85 if post_count >= 5 else (0.6 if post_count >= 1 else 0.0)
 
         return AnalyzerResult(
             score=score,

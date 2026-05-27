@@ -44,7 +44,8 @@ def _get_active_tickers(client) -> list[str]:
     return [r["ticker"] for r in (res.data or [])]
 
 
-def _fetch_subreddit(ticker: str, subreddit: str) -> list[dict]:
+def _fetch_subreddit(ticker: str, subreddit: str) -> list[dict] | None:
+    """None: 차단/403. 빈 list: 정상 수집 but 게시물 없음."""
     headers = {"User-Agent": _USER_AGENT}
     cutoff = time.time() - _SEARCH_WINDOW_DAYS * 86400
     try:
@@ -54,9 +55,9 @@ def _fetch_subreddit(ticker: str, subreddit: str) -> list[dict]:
             headers=headers,
             timeout=_TIMEOUT,
         )
-        if resp.status_code == 429:
-            log.warning("Reddit rate limited on r/%s for %s — skip", subreddit, ticker)
-            return []
+        if resp.status_code in (403, 429):
+            log.warning("Reddit blocked/rate-limited [r/%s, %s]: %d", subreddit, ticker, resp.status_code)
+            return None
         resp.raise_for_status()
         children = resp.json().get("data", {}).get("children", [])
         return [
@@ -65,14 +66,22 @@ def _fetch_subreddit(ticker: str, subreddit: str) -> list[dict]:
         ]
     except Exception as e:
         log.warning("fetch error [r/%s, %s]: %s", subreddit, ticker, e)
-        return []
+        return None
 
 
-def _collect(ticker: str) -> dict:
+def _collect(ticker: str) -> dict | None:
+    """None 반환 시 모든 서브레딧 수집 실패 — DB 저장 스킵."""
     posts = []
+    fetch_errors = 0
     for sub in _SUBREDDITS:
-        posts.extend(_fetch_subreddit(ticker, sub))
+        result = _fetch_subreddit(ticker, sub)
+        if result is None:  # 403/차단
+            fetch_errors += 1
+        else:
+            posts.extend(result)
         time.sleep(_INTER_SUBREDDIT_SLEEP)
+    if fetch_errors == len(_SUBREDDITS):
+        return None  # 전 서브레딧 차단 → 저장 안 함
     post_count = len(posts)
     total_upvotes = sum(p.get("score", 0) for p in posts if p.get("score", 0) > 0)
     return {"post_count": post_count, "total_upvotes": total_upvotes}
@@ -92,9 +101,13 @@ def run() -> None:
     ok = fail = 0
     now = datetime.now(timezone.utc).isoformat()
 
+    blocked = 0
     for ticker in tickers:
         try:
             data = _collect(ticker)
+            if data is None:
+                blocked += 1
+                continue  # 전 서브레딧 차단 → 저장 스킵
             client.table("reddit_snapshots").insert({
                 "ticker": ticker,
                 "post_count": data["post_count"],
@@ -108,7 +121,7 @@ def run() -> None:
             fail += 1
         time.sleep(_INTER_TICKER_SLEEP)
 
-    log.info("reddit_batch 완료: ok=%d fail=%d", ok, fail)
+    log.info("reddit_batch 완료: ok=%d fail=%d blocked=%d", ok, fail, blocked)
 
 
 if __name__ == "__main__":
