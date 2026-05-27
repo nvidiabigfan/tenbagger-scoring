@@ -49,18 +49,20 @@ function scoreColor(s: number) {
 }
 
 const KEY_LABEL: Record<string, string> = {
-  net_ratio_1m:    "애널 1개월",
-  net_ratio_3m:    "애널 3개월",
-  net_ratio_6m:    "애널 6개월",
-  net_ratio_1y:    "애널 1년",
-  composite_net:   "애널 종합",
-  upside_pct:      "목표가 괴리",
-  inst_trans_pct:  "기관 순매수",
-  rel_volume:      "상대 거래량",
-  rate_3m:         "Trends 3개월",
-  rate_6m:         "Trends 6개월",
-  rate_1y:         "Trends 1년",
-  composite_rate:  "Trends 종합",
+  net_ratio_1m:        "애널 1개월",
+  net_ratio_3m:        "애널 3개월",
+  net_ratio_6m:        "애널 6개월",
+  net_ratio_1y:        "애널 1년",
+  composite_net:       "애널 종합",
+  upside_pct:          "목표가 괴리",
+  inst_trans_pct:      "기관 순매수",
+  rel_volume:          "상대 거래량",
+  rate_3m:             "Trends 3개월",
+  rate_6m:             "Trends 6개월",
+  rate_1y:             "Trends 1년",
+  composite_rate:      "Trends 종합",
+  coverage_count_now:  "커버리지 수",
+  coverage_growth_3m:  "커버리지 증가(3m)",
 };
 
 // evidence 값 포맷
@@ -74,7 +76,7 @@ function fmtEvidence(key: string, val: unknown): string | null {
       return `${sign}${(val * 100).toFixed(1)}%`;
     }
     // 이미 % 단위
-    if (k.includes("pct")) {
+    if (k.includes("pct") || k === "coverage_growth_3m") {
       const sign = val >= 0 ? "+" : "";
       return `${sign}${val.toFixed(1)}%`;
     }
@@ -105,7 +107,7 @@ function EvidencePanel({ evidence }: { evidence: Record<string, unknown> }) {
 
   const isHighlight = (k: string) =>
     k.includes("rate") || k.includes("ratio") || k.includes("pct") ||
-    k === "composite_net" || k === "rel_volume";
+    k === "composite_net" || k === "rel_volume" || k === "coverage_growth_3m";
 
   const highlights = entries.filter(([k]) => isHighlight(k));
   const rest = entries.filter(([k]) => !isHighlight(k));
