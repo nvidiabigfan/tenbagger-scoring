@@ -47,15 +47,38 @@ function scoreColor(s: number) {
   return "text-red-500";
 }
 
+const KEY_LABEL: Record<string, string> = {
+  net_ratio_1m:    "애널 1개월",
+  net_ratio_3m:    "애널 3개월",
+  net_ratio_6m:    "애널 6개월",
+  net_ratio_1y:    "애널 1년",
+  composite_net:   "애널 종합",
+  upside_pct:      "목표가 괴리",
+  inst_trans_pct:  "기관 순매수",
+  rel_volume:      "상대 거래량",
+  rate_3m:         "Trends 3개월",
+  rate_6m:         "Trends 6개월",
+  rate_1y:         "Trends 1년",
+  composite_rate:  "Trends 종합",
+};
+
 // evidence 값 포맷
 function fmtEvidence(key: string, val: unknown): string | null {
   if (val === null || val === undefined) return null;
   const k = key.toLowerCase();
   if (typeof val === "number") {
-    if (k.includes("rate")) {
+    // 소수 비율 → ×100해서 %
+    if (k.includes("rate") || k.includes("ratio") || k === "composite_net") {
       const sign = val >= 0 ? "+" : "";
       return `${sign}${(val * 100).toFixed(1)}%`;
     }
+    // 이미 % 단위
+    if (k.includes("pct")) {
+      const sign = val >= 0 ? "+" : "";
+      return `${sign}${val.toFixed(1)}%`;
+    }
+    // 상대 배수
+    if (k === "rel_volume") return `${val.toFixed(2)}×`;
     if (k.includes("count") || k.includes("weeks") || k.includes("num")) {
       return String(Math.round(val));
     }
@@ -79,14 +102,15 @@ function EvidencePanel({ evidence }: { evidence: Record<string, unknown> }) {
 
   if (entries.length === 0) return null;
 
-  // rate 계열 하이라이트 (trends 변화율)
-  const highlights = entries.filter(([k]) => k.includes("rate") || k === "composite_rate");
-  const rest = entries.filter(([k]) => !k.includes("rate") && k !== "composite_rate");
+  const isHighlight = (k: string) =>
+    k.includes("rate") || k.includes("ratio") || k.includes("pct") ||
+    k === "composite_net" || k === "rel_volume";
+
+  const highlights = entries.filter(([k]) => isHighlight(k));
+  const rest = entries.filter(([k]) => !isHighlight(k));
 
   const keyLabel = (k: string) =>
-    k
-      .replace(/_/g, " ")
-      .replace(/\b(\w)/g, (c) => c.toUpperCase());
+    KEY_LABEL[k] ?? k.replace(/_/g, " ").replace(/\b(\w)/g, (c) => c.toUpperCase());
 
   return (
     <div className="mt-3 border-t border-gray-100 pt-2">
