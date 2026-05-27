@@ -32,12 +32,13 @@ const SIGNAL: Record<string, { label: string; cls: string }> = {
 };
 
 const MODULE_LABEL: Record<string, string> = {
-  etf:      "ETF 패시브 플로우",
+  revenue:  "매출 가속도",
+  etf:      "기관 수급 변화",
   analyst:  "애널리스트 컨센서스",
+  size:     "시총 비대칭",
+  trends:   "Google Trends 지속성",
+  buzz:     "Wikipedia 관심 증가",
   youtube:  "YouTube 주목도",
-  trends:   "Google Trends",
-  size:     "시가총액",
-  reddit:   "Reddit 소셜 센티먼트",
 };
 
 function scoreColor(s: number) {
@@ -214,7 +215,7 @@ export default function AnalyzePage() {
         <p className="text-gray-500 text-sm">
           <span className="font-semibold">{ticker}</span> 분석 중...
         </p>
-        <p className="text-gray-400 text-xs">ETF·애널리스트·Reddit·Trends 데이터 수집 중 (최대 30초)</p>
+        <p className="text-gray-400 text-xs">ETF·애널리스트·StockTwits·Trends 데이터 수집 중 (최대 30초)</p>
       </div>
     );
   }

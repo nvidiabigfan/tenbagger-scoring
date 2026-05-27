@@ -1,21 +1,18 @@
-"""시가총액 역가중 모듈 (SizeAnalyzer).
+"""시가총액 비대칭 모듈 (SizeAnalyzer) — 벨커브 방식.
 
-텐배거 = 아직 덜 발견된 종목의 10배 상승. 시총이 작을수록 상승 여력이 크다.
-대형주(NVIDIA·Apple 등)가 전체 점수를 지배하는 것을 방지하는 핵심 보정 모듈.
+텐배거 sweet spot: $300M ~ $5B 구간 우대.
+  $2B 부근 최고점 (100점)
+  너무 작은 microcap (<$50M): fraud 리스크 → 자연 감점
+  mega-cap (>$500B): 10배 여력 없음 → 자연 감점
 
-데이터: Finviz "Market Cap" (예: "3.40T", "18.41B", "540.25M")
+공식: 100 × exp(−(log10(cap_b / 2))² / (2 × 1.5²))
+  $300M ≈ 86점, $2B = 100점, $10B ≈ 90점, $50B ≈ 65점, $500B ≈ 28점
 
-점수 기준:
-  $2B 미만         : 100  ← 소형주 핵심 텐배거 구간
-  $2B  ~ $10B      :  90
-  $10B ~ $50B      :  70
-  $50B ~ $200B     :  45
-  $200B ~ $500B    :  20
-  $500B ~ $1T      :   8
-  $1T 이상         :   0  ← 메가캡, 텐배거 가능성 사실상 없음
+데이터: Finviz "Market Cap"
 """
 
 import logging
+import math
 import re
 
 from app.analyzers.base import Analyzer, AnalyzerResult
@@ -25,16 +22,8 @@ log = logging.getLogger(__name__)
 
 _SUFFIX = {"K": 1e3, "M": 1e6, "B": 1e9, "T": 1e12}
 
-# (상한 시총(USD), 점수)  — None은 상한 없음
-_TIERS: list[tuple[float | None, float]] = [
-    (2e9,   100),
-    (10e9,   90),
-    (50e9,   70),
-    (200e9,  45),
-    (500e9,  20),
-    (1e12,    8),
-    (None,    0),
-]
+_TARGET_CAP_B = 2.0   # sweet spot 중심: $2B
+_SIGMA        = 1.5   # log10 스케일 σ (클수록 완만)
 
 
 def _parse_cap(raw: str) -> float | None:
@@ -51,10 +40,13 @@ def _parse_cap(raw: str) -> float | None:
 
 
 def _cap_score(market_cap: float) -> float:
-    for cap_limit, score in _TIERS:
-        if cap_limit is None or market_cap < cap_limit:
-            return score
-    return 0.0
+    """가우시안 벨커브: $2B 중심, log10 스케일."""
+    cap_b = market_cap / 1e9
+    if cap_b <= 0:
+        return 0.0
+    log_ratio = math.log10(cap_b / _TARGET_CAP_B)
+    score = 100.0 * math.exp(-(log_ratio ** 2) / (2 * _SIGMA ** 2))
+    return round(max(0.0, min(100.0, score)), 2)
 
 
 def _signal(score: float) -> str:
@@ -65,6 +57,22 @@ def _signal(score: float) -> str:
     if score >= 35:
         return "hold"
     return "sell"
+
+
+def _cap_zone(cap_b: float) -> str:
+    if cap_b < 0.05:
+        return "nano-cap"
+    if cap_b < 0.3:
+        return "micro-cap"
+    if cap_b < 2.0:
+        return "small-cap"
+    if cap_b < 10.0:
+        return "sweet-spot"
+    if cap_b < 100.0:
+        return "mid-cap"
+    if cap_b < 500.0:
+        return "large-cap"
+    return "mega-cap"
 
 
 class SizeAnalyzer(Analyzer):
@@ -107,7 +115,7 @@ class SizeAnalyzer(Analyzer):
                 evidence={
                     "market_cap_raw": raw,
                     "market_cap_b": round(cap_b, 2),
-                    "market_cap_usd": int(market_cap),
+                    "cap_zone": _cap_zone(cap_b),
                 },
                 confidence=1.0,
                 timestamp=self.now_utc(),

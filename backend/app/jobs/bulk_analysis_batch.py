@@ -19,8 +19,9 @@ load_dotenv()
 from supabase import create_client
 
 from app.analyzers.analyst import AnalystAnalyzer
+from app.analyzers.buzz import BuzzAnalyzer
 from app.analyzers.etf import EtfAnalyzer
-from app.analyzers.reddit import RedditAnalyzer
+from app.analyzers.revenue import RevenueAccelerationAnalyzer
 from app.analyzers.size import SizeAnalyzer
 from app.analyzers.trends import TrendsAnalyzer, jitter_sleep
 from app.analyzers.youtube import YouTubeAnalyzer
@@ -60,9 +61,10 @@ def run() -> None:
 
     log.info("bulk_analysis_batch: 마스터 %d개, MAX_BATCH=%d, FORCE=%s", len(all_tickers), MAX_BATCH, FORCE_REANALYSIS)
 
-    engine = ScoringEngine(
-        [SizeAnalyzer(), EtfAnalyzer(), AnalystAnalyzer(), TrendsAnalyzer(), YouTubeAnalyzer(), RedditAnalyzer()]
-    )
+    engine = ScoringEngine([
+        RevenueAccelerationAnalyzer(), EtfAnalyzer(), AnalystAnalyzer(),
+        SizeAnalyzer(), TrendsAnalyzer(), BuzzAnalyzer(), YouTubeAnalyzer(),
+    ])
 
     ok = fail = skipped = 0
     for ticker in all_tickers:

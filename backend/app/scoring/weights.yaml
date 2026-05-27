@@ -1,27 +1,31 @@
 modules:
-  reddit:
-    weight: 30
-    enabled: true
-
-  analyst:
-    weight: 30
-    enabled: true    # 목표가 상승폭 = 텐배거 핵심 선행지표
-
-  trends:
+  revenue:
     weight: 25
-    enabled: true    # 52주 관심 증가 추세 = 장기 발굴 신호
-
-  size:
-    weight: 20
-    enabled: true    # 시총 역가중 — 대형주 패널티, 소형주 보너스
+    enabled: true    # 매출 가속도 — 구조적 변화의 핵심 선행지표
 
   etf:
+    weight: 20
+    enabled: true    # 기관 수급 변화 — discovery 조기 신호
+
+  analyst:
     weight: 15
-    enabled: true    # 기관보유 보조지표
+    enabled: true    # 애널리스트 컨센서스 변화 (coverage 확대 포함)
+
+  size:
+    weight: 15
+    enabled: true    # 시총 비대칭 — sweet spot $300M~$5B 우대
+
+  trends:
+    weight: 15
+    enabled: true    # Google Trends 관심 지속성
+
+  buzz:
+    weight: 10
+    enabled: true    # Wikipedia 페이지뷰 기반 관심 증가
 
   youtube:
-    weight: 10
-    enabled: true    # 단기 버즈 보조지표
+    weight: 0
+    enabled: false   # 쿼터 제한으로 비활성 (Phase 2에서 채널품질 개선 후 재활성)
 
 scoring:
   strong_buy_threshold: 75

@@ -6,7 +6,8 @@ from pydantic import BaseModel
 
 from app.analyzers.analyst import AnalystAnalyzer
 from app.analyzers.etf import EtfAnalyzer
-from app.analyzers.reddit import RedditAnalyzer
+from app.analyzers.buzz import BuzzAnalyzer
+from app.analyzers.revenue import RevenueAccelerationAnalyzer
 from app.analyzers.size import SizeAnalyzer
 from app.analyzers.trends import TrendsAnalyzer
 from app.analyzers.youtube import YouTubeAnalyzer
@@ -21,7 +22,10 @@ _engine: ScoringEngine | None = None
 def _get_engine() -> ScoringEngine:
     global _engine
     if _engine is None:
-        _engine = ScoringEngine([SizeAnalyzer(), EtfAnalyzer(), AnalystAnalyzer(), TrendsAnalyzer(), YouTubeAnalyzer(), RedditAnalyzer()])
+        _engine = ScoringEngine([
+            RevenueAccelerationAnalyzer(), EtfAnalyzer(), AnalystAnalyzer(),
+            SizeAnalyzer(), TrendsAnalyzer(), BuzzAnalyzer(), YouTubeAnalyzer(),
+        ])
     return _engine
 
 

@@ -16,8 +16,9 @@ load_dotenv()
 from supabase import create_client
 
 from app.analyzers.analyst import AnalystAnalyzer
+from app.analyzers.buzz import BuzzAnalyzer
 from app.analyzers.etf import EtfAnalyzer
-from app.analyzers.reddit import RedditAnalyzer
+from app.analyzers.revenue import RevenueAccelerationAnalyzer
 from app.analyzers.size import SizeAnalyzer
 from app.analyzers.trends import TrendsAnalyzer, jitter_sleep
 from app.analyzers.youtube import YouTubeAnalyzer
@@ -128,9 +129,10 @@ def run() -> None:
     tickers = list({e["ticker"] for e in watchlist})
     log.info("watchlist_batch: %d개 종목 / %d개 항목 대상", len(tickers), len(watchlist))
 
-    engine = ScoringEngine(
-        [SizeAnalyzer(), EtfAnalyzer(), AnalystAnalyzer(), TrendsAnalyzer(), YouTubeAnalyzer(), RedditAnalyzer()]
-    )
+    engine = ScoringEngine([
+        RevenueAccelerationAnalyzer(), EtfAnalyzer(), AnalystAnalyzer(),
+        SizeAnalyzer(), TrendsAnalyzer(), BuzzAnalyzer(), YouTubeAnalyzer(),
+    ])
 
     ok = fail = cached = 0
     for ticker in tickers:
