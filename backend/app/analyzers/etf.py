@@ -1,20 +1,18 @@
-"""ETF 편입 분석 모듈.
+"""ETF·기관 수요 변화 분석 모듈.
 
-데이터: Finviz (Inst Own %, Inst Trans %)
-시그널 로직:
-  - 기관 보유 비중(Inst Own)이 높을수록 ETF 포함 패시브 수요 강함
-  - 기관 순매수 변화(Inst Trans) 양수면 가산점
-  - S&P500 / 나스닥100 편입 여부 자체가 강한 패시브 수요 신호
-  - score = inst_own_score + trans_bonus + index_bonus
+시그널 로직 (상대적 변화 측정):
+  - Inst Trans (%): 분기 기관 순매수 변화율 → 핵심 지표 (0~60점)
+    -10% 이하=0점, 0%=30점, +10% 이상=60점
+  - Rel Volume: 현재 거래량 / 평균 거래량 → 시장 관심 변화 (0~20점)
+    0.5 이하=0점, 1.0=10점, 1.5 이상=20점
+  - Inst Own (%): 기관 보유 비중 → 보조 (0~15점)
+  - Index 편입 여부 → 보조 (0~5점)
 """
 
 from datetime import datetime, timezone
 
 from app.analyzers.base import Analyzer, AnalyzerResult
 from app.core import finviz
-
-# S&P500·나스닥100 포함 여부 체크용 (종목 마스터 import 시 exchange 세팅)
-MAJOR_INDEX_EXCHANGES = {"NYSE", "NASDAQ"}
 
 
 class EtfAnalyzer(Analyzer):
@@ -37,13 +35,12 @@ class EtfAnalyzer(Analyzer):
     def _analyze(self, ticker: str) -> AnalyzerResult:
         metrics = finviz.get_metrics(ticker)
 
-        inst_own = finviz.parse_float(metrics.get("Inst Own"))   # % (e.g. 67.2)
-        inst_trans = finviz.parse_float(metrics.get("Inst Trans"))  # % 변화 (e.g. 2.5)
-        shr_float = finviz.parse_float(metrics.get("Shs Float"))   # float 주식 수 (M)
-        # index 편입 여부: finviz "Index" 컬럼 (S&P 500, DJIA, NDX 등)
+        inst_trans = finviz.parse_float(metrics.get("Inst Trans"))  # % 변화 (분기)
+        rel_volume = finviz.parse_float(metrics.get("Rel Volume"))  # 현재/평균 거래량
+        inst_own = finviz.parse_float(metrics.get("Inst Own"))      # 기관 보유 비중 %
         index_str = metrics.get("Index", "")
 
-        if inst_own is None:
+        if inst_trans is None and inst_own is None:
             return AnalyzerResult(
                 score=0.0,
                 signal="hold",
@@ -52,32 +49,41 @@ class EtfAnalyzer(Analyzer):
                 timestamp=datetime.now(timezone.utc),
             )
 
-        # inst_own 기반 기본 점수 (70% 이상 → 70점)
-        inst_own_score = min(70.0, inst_own)
-
-        # 기관 순매수 변화 보너스 (최대 15점)
-        trans_bonus = 0.0
+        # 핵심: 분기 기관 순매수 변화율 → 0~60점
+        # -10% → 0점, 0% → 30점, +10% → 60점 (선형)
         if inst_trans is not None:
-            trans_bonus = min(15.0, max(-15.0, inst_trans * 3))
+            inst_trans_score = max(0.0, min(60.0, (inst_trans + 10.0) * 3.0))
+        else:
+            inst_trans_score = 30.0  # 데이터 없으면 중립
 
-        # 주요 지수 편입 보너스
-        index_bonus = 0.0
-        if "S&P" in index_str:
-            index_bonus += 10.0
-        if "NDX" in index_str or "Nasdaq" in index_str.lower():
-            index_bonus += 5.0
+        # 거래량 모멘텀: Rel Volume → 0~20점
+        # 0.5 → 0점, 1.0 → 10점, 1.5+ → 20점
+        if rel_volume is not None:
+            rel_volume_score = max(0.0, min(20.0, (rel_volume - 0.5) * 20.0))
+        else:
+            rel_volume_score = 10.0  # 데이터 없으면 중립
 
-        score = min(100.0, max(0.0, inst_own_score + trans_bonus + index_bonus))
-        confidence = 0.8 if inst_trans is not None else 0.6
+        # 기관 보유 비중 보조 → 0~15점 (100% = 15점)
+        inst_own_score = min(15.0, inst_own * 0.15) if inst_own is not None else 0.0
+
+        # 주요 지수 편입 보너스 → 0~5점
+        index_bonus = 5.0 if ("S&P" in index_str or "NDX" in index_str) else 0.0
+
+        score = min(100.0, inst_trans_score + rel_volume_score + inst_own_score + index_bonus)
+
+        # confidence: inst_trans가 핵심, 없으면 낮음
+        confidence = 0.85 if inst_trans is not None else 0.55
 
         return AnalyzerResult(
             score=round(score, 2),
             signal=_score_to_signal(score),
             evidence={
-                "inst_own_pct": inst_own,
                 "inst_trans_pct": inst_trans,
+                "rel_volume": rel_volume,
+                "inst_own_pct": inst_own,
                 "index": index_str or None,
-                "shs_float_m": shr_float,
+                "inst_trans_score": round(inst_trans_score, 1),
+                "rel_volume_score": round(rel_volume_score, 1),
             },
             confidence=confidence,
             timestamp=datetime.now(timezone.utc),

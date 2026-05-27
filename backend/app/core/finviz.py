@@ -2,9 +2,13 @@
 
 단일 종목 기본 지표를 Finviz quote 페이지에서 파싱.
 반환값 예시: {"Recom": "1.27", "Target Price": "304.50", "Inst Own": "69.21%", "Index": "DJIA, NDX, S&P 500", ...}
+get_ratings_history(): 차트 이벤트에서 analyst ratings 변경 이력 반환.
 """
 
+import json
 import re
+from datetime import datetime, timezone
+
 import httpx
 
 UA = (
@@ -71,6 +75,61 @@ def _parse_stock_info(html: str) -> dict[str, str]:
     if len(tabs) >= 6:
         result["exchange"] = tabs[5]
     return result
+
+
+def get_ratings_history(ticker: str) -> list[dict]:
+    """Finviz 차트 이벤트에서 analyst ratings 변경 이력 반환.
+
+    반환 형식: [{"date": datetime, "action": "Upgrade"|"Downgrade"|"Reiterate"|"Init", "analyst": str, "target": float|None}]
+    최근 1~2년치 주요 변경 포함. 데이터 없으면 빈 리스트.
+    """
+    url = f"https://finviz.com/quote.ashx?t={ticker}&p=d"
+    r = httpx.get(url, headers={"User-Agent": UA, "Accept": "text/html"}, timeout=TIMEOUT, follow_redirects=True)
+    r.raise_for_status()
+    return _parse_ratings_history(r.text)
+
+
+def _parse_ratings_history(html: str) -> list[dict]:
+    pattern = r'\{"dateTimestamp":(\d+),"eventType":"chartEvent/ratings","ratings":\[([^\]]+)\]\}'
+    results = []
+    for ts_str, ratings_json_str in re.findall(pattern, html):
+        ts = int(ts_str)
+        date = datetime.fromtimestamp(ts, tz=timezone.utc)
+        try:
+            ratings = json.loads(f"[{ratings_json_str}]")
+        except json.JSONDecodeError:
+            continue
+        for entry in ratings:
+            action_raw = entry.get("action", "")
+            action = _normalize_action(action_raw)
+            target_str = entry.get("targetPrice", "").replace("$", "").replace(",", "")
+            target = None
+            try:
+                if target_str:
+                    target = float(target_str)
+            except ValueError:
+                pass
+            results.append({
+                "date": date,
+                "action": action,
+                "analyst": entry.get("analyst", ""),
+                "target": target,
+            })
+    results.sort(key=lambda x: x["date"], reverse=True)
+    return results
+
+
+def _normalize_action(raw: str) -> str:
+    low = raw.lower()
+    if low in ("upgrade",):
+        return "upgrade"
+    if low in ("downgrade",):
+        return "downgrade"
+    if low in ("initiated", "init", "initiate"):
+        return "init"
+    if low in ("reiterate", "reiterates", "maintains"):
+        return "reiterate"
+    return "other"
 
 
 def parse_float(value: str | None) -> float | None:
