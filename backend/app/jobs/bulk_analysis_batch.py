@@ -5,7 +5,7 @@ GitHub Actions daily-batch.yml → bulk-analysis job에서 실행.
   1. stocks 마스터 → market_cap DESC 정렬 (중요 종목 우선)
   2. 24h 캐시 없는 종목만 분석 (최대 MAX_BATCH개)
   3. 분석 완료 후 ranking_snapshot 자동 실행
-YouTube API 10,000 unit/일 한도 → 종목당 ~101 unit → MAX_BATCH=95 (여유분 확보)
+YouTube API 10,000 unit/일 한도 → 종목당 ~101 unit → YouTubeAnalyzer 내부 85회 hard limit
 """
 
 import logging

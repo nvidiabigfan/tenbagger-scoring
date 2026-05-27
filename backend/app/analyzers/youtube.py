@@ -5,8 +5,9 @@
   - 최근 7일 업로드 영상 수 → 콘텐츠 생산 활발도
   - 영상별 조회수 합산 → 실제 관심 규모
   - score = video_score(0~50) + view_score(0~50)
-쿼터: 검색 1회=100 unit, 통계 조회 1회=1 unit × N개
-  → 종목당 약 101~150 unit 소비 (일 한도 10,000 unit 기준 ~66종목/일)
+쿼터: search 1회=100 unit, videos.list 1회=1 unit
+  → 종목당 ~101 unit, 일 한도 10,000 unit
+  → _DAILY_SEARCH_LIMIT=85 (8,585 unit) — on-demand 여유분 포함
 """
 
 import logging
@@ -16,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from tenacity import retry, stop_after_attempt, wait_fixed
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_fixed
 
 from app.analyzers.base import Analyzer, AnalyzerResult
 
@@ -24,6 +25,21 @@ log = logging.getLogger(__name__)
 
 _SEARCH_WINDOW_DAYS = 7
 _MAX_RESULTS = 50
+_DAILY_SEARCH_LIMIT = 85  # search.list() 호출 상한. 초과 시 confidence=0 반환
+
+# 프로세스 내 일일 quota 카운터
+_quota_used: int = 0
+_quota_exhausted: bool = False  # 429 응답 시 True → 이후 모든 호출 차단
+
+
+def _skip_result(reason: str) -> "AnalyzerResult":
+    return AnalyzerResult(
+        score=0.0,
+        signal="hold",
+        evidence={"error": reason},
+        confidence=0.0,
+        timestamp=datetime.now(timezone.utc),
+    )
 
 
 class YouTubeAnalyzer(Analyzer):
@@ -32,28 +48,34 @@ class YouTubeAnalyzer(Analyzer):
         return "youtube"
 
     def analyze(self, ticker: str) -> AnalyzerResult:
+        global _quota_used, _quota_exhausted
+        if _quota_exhausted:
+            log.debug("YouTube quota exhausted — skipping %s", ticker)
+            return _skip_result("quota_exhausted")
+        if _quota_used >= _DAILY_SEARCH_LIMIT:
+            log.warning("YouTube daily search limit(%d) reached — skipping %s", _DAILY_SEARCH_LIMIT, ticker)
+            _quota_exhausted = True
+            return _skip_result("daily_limit_reached")
         try:
-            return self._analyze(ticker)
+            result = self._analyze(ticker)
+            _quota_used += 1
+            return result
+        except HttpError as e:
+            if e.status_code == 429:
+                log.warning("YouTube 429 — marking quota exhausted")
+                _quota_exhausted = True
+            else:
+                log.warning("YouTubeAnalyzer error [%s]: %s", ticker, e)
+            return _skip_result(f"http_{e.status_code}")
         except Exception as e:
             log.warning("YouTubeAnalyzer error [%s]: %s", ticker, e)
-            return AnalyzerResult(
-                score=0.0,
-                signal="hold",
-                evidence={"error": str(e)},
-                confidence=0.0,
-                timestamp=datetime.now(timezone.utc),
-            )
+            return _skip_result(str(e))
 
     def _analyze(self, ticker: str) -> AnalyzerResult:
+        """HttpError는 호출자(analyze)로 전파하여 quota guard가 처리."""
         api_key = os.environ.get("YOUTUBE_API_KEY")
         if not api_key:
-            return AnalyzerResult(
-                score=0.0,
-                signal="hold",
-                evidence={"error": "YOUTUBE_API_KEY not set"},
-                confidence=0.0,
-                timestamp=datetime.now(timezone.utc),
-            )
+            return _skip_result("YOUTUBE_API_KEY not set")
 
         yt = build("youtube", "v3", developerKey=api_key, cache_discovery=False)
         published_after = (
@@ -93,7 +115,12 @@ class YouTubeAnalyzer(Analyzer):
         )
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+def _is_retryable(e: BaseException) -> bool:
+    """429(quota)는 재시도해도 의미 없음 → 즉시 전파."""
+    return not (isinstance(e, HttpError) and e.status_code == 429)
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2), retry=retry_if_exception(_is_retryable))
 def _search_videos(yt, ticker: str, published_after: str) -> list[str]:
     resp = (
         yt.search()
@@ -111,7 +138,7 @@ def _search_videos(yt, ticker: str, published_after: str) -> list[str]:
     return [item["id"]["videoId"] for item in resp.get("items", [])]
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2), retry=retry_if_exception(_is_retryable))
 def _get_total_views(yt, video_ids: list[str]) -> int:
     resp = (
         yt.videos()
