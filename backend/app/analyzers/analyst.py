@@ -77,24 +77,23 @@ def _score_from_history(ratings, upside_score, target, price, upside):
     net_6m = _net_ratio(ratings, 6)
     net_1y = _net_ratio(ratings, 12)
 
-    # 없는 구간은 0으로 처리 (중립)
-    def coalesce(*vals):
-        for v in vals:
-            if v is not None:
-                return v
-        return 0.0
+    # 없는 구간은 중립(0.0)으로 처리
+    def nz(v):
+        return v if v is not None else 0.0
 
-    # 가중 composite: 최근일수록 가중치 높음
+    # 가중 composite: 최근일수록 가중치 높음 (1m 40% + 3m 30% + 6m 20% + 1y 10%)
     composite = (
-        coalesce(net_1m) * 0.50
-        + coalesce(net_3m, net_1m) * 0.30
-        + coalesce(net_6m, net_3m, net_1m) * 0.20
+        nz(net_1m) * 0.40
+        + nz(net_3m) * 0.30
+        + nz(net_6m) * 0.20
+        + nz(net_1y) * 0.10
     )
     # composite: -1 ~ +1 → 0 ~ 80점 (0 = 중립 40점)
     rating_score = (composite + 1) / 2 * 80
 
     score = min(100.0, rating_score + upside_score)
-    confidence = 0.85 if net_1m is not None else 0.70
+    has_recent = net_3m is not None
+    confidence = 0.85 if has_recent else (0.70 if len(ratings) > 0 else 0.55)
 
     evidence = {
         "net_ratio_1m": round(net_1m, 3) if net_1m is not None else None,
