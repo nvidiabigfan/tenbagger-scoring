@@ -3,15 +3,20 @@
 시그널 로직 (상대적 변화 측정):
   - Finviz 차트 이벤트에서 1년치 ratings 이력 수집
   - 1m / 3m / 6m / 1y 구간별 net_ratio = (upgrades - downgrades) / total
-  - composite = 1m×50% + 3m×30% + 6m×20%  → 0~80점
+  - composite = 1m×40% + 3m×30% + 6m×20% + 1y×10%  → 0~65점
   - upside_score = (목표가 - 현재가) / 현재가  → 0~20점
+  - coverage_bonus = 90일간 ratings_count 증가율 비교  → 0~15점
   - ratings 이력 부족 시: 현재 Recom 기반 fallback
 """
 
-from datetime import datetime, timedelta, timezone
+import logging
+import os
+from datetime import date, datetime, timedelta, timezone
 
 from app.analyzers.base import Analyzer, AnalyzerResult
 from app.core import finviz
+
+log = logging.getLogger(__name__)
 
 
 class AnalystAnalyzer(Analyzer):
@@ -40,13 +45,18 @@ class AnalystAnalyzer(Analyzer):
         upside = (target - price) / price if (target and price and price > 0) else 0.0
         upside_score = min(20.0, max(0.0, upside * 100))
 
-        # ratings 이력 기반 점수
         ratings = finviz.get_ratings_history(ticker)
-        if len(ratings) >= 2:
+        ratings_count_1y = len(ratings)
+
+        if ratings_count_1y >= 2:
             score, confidence, evidence = _score_from_history(ratings, upside_score, target, price, upside)
         else:
-            # fallback: 현재 Recom 절대값 기반
             score, confidence, evidence = _score_from_recom(recom_raw, upside_score, target, price, upside)
+
+        # coverage expansion 보너스 (0~15점): 90일간 커버리지 증가 감지
+        coverage_bonus, coverage_evidence = _coverage_bonus(ticker, ratings_count_1y)
+        score = min(100.0, score + coverage_bonus)
+        evidence.update(coverage_evidence)
 
         return AnalyzerResult(
             score=round(score, 2),
@@ -55,6 +65,64 @@ class AnalystAnalyzer(Analyzer):
             confidence=confidence,
             timestamp=datetime.now(timezone.utc),
         )
+
+
+def _coverage_bonus(ticker: str, current_count: int) -> tuple[float, dict]:
+    """analyst_snapshots DB에서 90일 전 스냅샷과 비교해 coverage 증가 보너스 반환.
+    DB 미연결/스냅샷 없으면 보너스 0 + 오늘자 스냅샷 저장 시도.
+    """
+    try:
+        from supabase import create_client
+
+        client = create_client(
+            os.environ["SUPABASE_URL"],
+            os.environ["SUPABASE_SERVICE_KEY"],
+        )
+
+        today = date.today().isoformat()
+        past_date = (date.today() - timedelta(days=90)).isoformat()
+
+        # 오늘 스냅샷 upsert (매 분석마다 갱신)
+        client.table("analyst_snapshots").upsert(
+            {"ticker": ticker, "snapshot_date": today, "ratings_count_1y": current_count},
+            on_conflict="ticker,snapshot_date",
+        ).execute()
+
+        # 90일 전 스냅샷 조회
+        res = (
+            client.table("analyst_snapshots")
+            .select("ratings_count_1y, snapshot_date")
+            .eq("ticker", ticker)
+            .lte("snapshot_date", past_date)
+            .order("snapshot_date", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        if not res.data:
+            return 0.0, {"coverage_growth_3m": None, "coverage_count_now": current_count}
+
+        past_count = res.data[0]["ratings_count_1y"]
+        past_snap_date = res.data[0]["snapshot_date"]
+
+        if past_count == 0:
+            # 과거 0 → 현재 N : 신규 커버리지 발생, 최대 보너스
+            growth = 1.0 if current_count > 0 else 0.0
+        else:
+            growth = (current_count - past_count) / past_count  # 음수 가능
+
+        # 50% 성장 → 15점, 100% 성장 → 15점(상한), 감소 → 0점
+        bonus = min(15.0, max(0.0, growth * 30.0))
+
+        return round(bonus, 2), {
+            "coverage_count_now": current_count,
+            "coverage_count_90d_ago": past_count,
+            "coverage_growth_3m": round(growth * 100, 1),
+            "coverage_snapshot_date": past_snap_date,
+        }
+    except Exception as e:
+        log.debug("coverage_bonus skip [%s]: %s", ticker, e)
+        return 0.0, {"coverage_growth_3m": None, "coverage_count_now": current_count}
 
 
 def _net_ratio(ratings: list[dict], months_back: int, months_end: int = 0) -> float | None:
@@ -77,21 +145,19 @@ def _score_from_history(ratings, upside_score, target, price, upside):
     net_6m = _net_ratio(ratings, 6)
     net_1y = _net_ratio(ratings, 12)
 
-    # 없는 구간은 중립(0.0)으로 처리
     def nz(v):
         return v if v is not None else 0.0
 
-    # 가중 composite: 최근일수록 가중치 높음 (1m 40% + 3m 30% + 6m 20% + 1y 10%)
+    # composite: -1 ~ +1 → 0 ~ 65점 (0 = 중립 32.5점)
     composite = (
         nz(net_1m) * 0.40
         + nz(net_3m) * 0.30
         + nz(net_6m) * 0.20
         + nz(net_1y) * 0.10
     )
-    # composite: -1 ~ +1 → 0 ~ 80점 (0 = 중립 40점)
-    rating_score = (composite + 1) / 2 * 80
+    rating_score = (composite + 1) / 2 * 65
 
-    score = min(100.0, rating_score + upside_score)
+    score = min(85.0, rating_score + upside_score)  # coverage_bonus 위한 여유 (max 85 before bonus)
     has_recent = net_3m is not None
     confidence = 0.85 if has_recent else (0.70 if len(ratings) > 0 else 0.55)
 
@@ -113,8 +179,8 @@ def _score_from_history(ratings, upside_score, target, price, upside):
 def _score_from_recom(recom_raw, upside_score, target, price, upside):
     if recom_raw is None:
         return 0.0, 0.0, {"error": "no_analyst_data"}
-    recom_score = max(0.0, (5.0 - recom_raw) / 4.0 * 80.0)
-    score = min(100.0, recom_score + upside_score)
+    recom_score = max(0.0, (5.0 - recom_raw) / 4.0 * 65.0)
+    score = min(85.0, recom_score + upside_score)
     confidence = 0.70 if target else 0.55
     evidence = {
         "recom": recom_raw,
