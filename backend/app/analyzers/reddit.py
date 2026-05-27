@@ -28,6 +28,10 @@ _USER_AGENT = "tenbagger-scoring/1.0 (data collection bot)"
 _TIMEOUT = 10
 
 
+class _RedditIPBlocked(Exception):
+    """서버 IP 차단 감지 — confidence=0으로 모듈 제외."""
+
+
 def _get_praw_client():
     client_id = os.environ.get("REDDIT_CLIENT_ID")
     client_secret = os.environ.get("REDDIT_CLIENT_SECRET")
@@ -69,7 +73,16 @@ class RedditAnalyzer(Analyzer):
             posts = _collect_posts_praw(reddit, ticker)
             method = "praw"
         else:
-            posts = _collect_posts_public(ticker)
+            try:
+                posts = _collect_posts_public(ticker)
+            except _RedditIPBlocked:
+                return AnalyzerResult(
+                    score=0.0,
+                    signal="hold",
+                    evidence={"error": "ip_blocked", "method": "public"},
+                    confidence=0.0,
+                    timestamp=datetime.now(timezone.utc),
+                )
             method = "public"
 
         post_count = len(posts)
@@ -133,7 +146,7 @@ def _collect_posts_public(ticker: str) -> list[dict]:
             consecutive_fails += 1
             if consecutive_fails >= 2:
                 log.warning("Reddit IP block detected for %s — skipping remaining", ticker)
-                break
+                raise _RedditIPBlocked(ticker)
 
     return posts
 
