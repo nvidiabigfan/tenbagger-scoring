@@ -95,7 +95,6 @@ def _upsert(con, df: pd.DataFrame) -> int:
                total_revenue, gross_profit, net_income, eps_diluted
         FROM _tmp_qf
         ON CONFLICT (ticker, period_end) DO UPDATE SET
-            avail_date    = EXCLUDED.avail_date,
             total_revenue = EXCLUDED.total_revenue,
             gross_profit  = EXCLUDED.gross_profit,
             net_income    = EXCLUDED.net_income,
