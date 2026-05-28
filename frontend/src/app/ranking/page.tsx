@@ -67,14 +67,14 @@ export default async function RankingPage() {
       ) : (
         <>
           {/* 상위 3 카드 */}
-          <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-6">
             {rows.slice(0, 3).map((row) => {
               const sig = scoreSignal(row.score);
               return (
                 <Link
                   key={row.rank}
                   href={`/analyze/${row.ticker}`}
-                  className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:border-blue-200 hover:shadow-md transition-all text-center"
+                  className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 sm:p-4 hover:border-blue-200 hover:shadow-md transition-all text-center"
                 >
                   <div className="mb-1">
                     <RankBadge rank={row.rank} />

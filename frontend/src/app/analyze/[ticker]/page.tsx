@@ -40,14 +40,13 @@ function Sparkline({ data }: { data: number[] }) {
   const pts = scores.map((v, i) => `${toX(i)},${toY(v)}`).join(" ");
   const last = { x: toX(scores.length - 1), y: toY(scores[scores.length - 1]) };
 
-  // 그라데이션 영역
   const areaPath =
     `M ${toX(0)},${H} ` +
     scores.map((v, i) => `L ${toX(i)},${toY(v)}`).join(" ") +
     ` L ${toX(scores.length - 1)},${H} Z`;
 
   return (
-    <svg width={W} height={H} className="overflow-visible">
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ height: "auto" }} className="overflow-visible">
       <defs>
         <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.18" />
@@ -102,13 +101,13 @@ function GrowthContextCard({ ctx }: { ctx: GrowthContext }) {
 
       {/* 추이 차트 */}
       {scores.length >= 1 && (
-        <div>
+        <div className="w-full overflow-hidden">
           <div className="text-[10px] text-gray-400 mb-1">
             {scores.length}주 점수 추이
           </div>
           <Sparkline data={scores} />
           {weeks.length >= 2 && (
-            <div className="flex justify-between text-[9px] text-gray-300 mt-1" style={{ width: 240 }}>
+            <div className="flex justify-between text-[9px] text-gray-300 mt-1 w-full">
               <span>{weeks[0]}</span>
               <span>{weeks[weeks.length - 1]}</span>
             </div>
@@ -372,7 +371,7 @@ export default function AnalyzePage() {
         <p className="text-gray-500 text-sm">
           <span className="font-semibold">{ticker}</span> 분석 중...
         </p>
-        <p className="text-gray-400 text-xs">ETF·애널리스트·StockTwits·Trends 데이터 수집 중 (최대 30초)</p>
+        <p className="text-gray-400 text-xs">매출·ETF·애널·모멘텀·버즈·내부자 데이터 수집 중 (최대 30초)</p>
       </div>
     );
   }
@@ -403,7 +402,7 @@ export default function AnalyzePage() {
       </button>
 
       {/* Score Card */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 mb-6 text-center">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8 mb-6 text-center">
         <div className="flex items-center justify-between mb-1">
           <h1 className="text-3xl font-bold text-gray-900">{result.ticker}</h1>
           <button
@@ -419,7 +418,7 @@ export default function AnalyzePage() {
             {inWatchlist ? "★ 추가됨" : "☆ 워치리스트"}
           </button>
         </div>
-        <div className={`text-8xl font-black my-5 tabular-nums ${scoreColor(result.total_score)}`}>
+        <div className={`text-6xl sm:text-8xl font-black my-5 tabular-nums ${scoreColor(result.total_score)}`}>
           {result.total_score}
         </div>
         <span className={`inline-block px-4 py-1.5 rounded-full text-sm font-semibold ${sig.cls}`}>

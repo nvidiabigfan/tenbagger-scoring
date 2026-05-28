@@ -42,7 +42,7 @@ export default function Home() {
     <div className="flex flex-col items-center pt-20">
       <h1 className="text-3xl font-bold text-gray-900 mb-2">텐배거스코어링</h1>
       <p className="text-gray-500 mb-10 text-center text-sm">
-        Reddit·ETF·애널리스트·Trends·YouTube·시총 6개 모듈로 텐배거 후보 가능성 0~100점
+        매출·ETF·애널리스트·시총·모멘텀·버즈·내부자 7개 모듈로 성장주 모멘텀 점수 0~100점
       </p>
 
       <div className="relative w-full max-w-md">
