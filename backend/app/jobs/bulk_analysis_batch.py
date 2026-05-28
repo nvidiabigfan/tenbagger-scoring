@@ -21,10 +21,10 @@ from supabase import create_client
 from app.analyzers.analyst import AnalystAnalyzer
 from app.analyzers.buzz import BuzzAnalyzer
 from app.analyzers.etf import EtfAnalyzer
+from app.analyzers.insider import InsiderAnalyzer
+from app.analyzers.momentum import MomentumAnalyzer
 from app.analyzers.revenue import RevenueAccelerationAnalyzer
 from app.analyzers.size import SizeAnalyzer
-from app.analyzers.trends import TrendsAnalyzer, jitter_sleep
-from app.analyzers.youtube import YouTubeAnalyzer
 from app.db import client as db
 from app.jobs import ranking_snapshot
 from app.scoring.engine import ScoringEngine
@@ -34,7 +34,7 @@ log = logging.getLogger(__name__)
 
 MAX_BATCH = int(os.getenv("BULK_BATCH_MAX", "95"))
 FORCE_REANALYSIS = os.getenv("FORCE_REANALYSIS", "0") == "1"
-_INTER_STOCK_SLEEP = 10.0  # 종목 간 대기 (Trends 429 방지)
+_INTER_STOCK_SLEEP = 2.0  # 종목 간 대기 (Finviz rate limit 방지)
 
 
 def _get_candidate_tickers() -> list[str]:
@@ -63,7 +63,7 @@ def run() -> None:
 
     engine = ScoringEngine([
         RevenueAccelerationAnalyzer(), EtfAnalyzer(), AnalystAnalyzer(),
-        SizeAnalyzer(), TrendsAnalyzer(), BuzzAnalyzer(), YouTubeAnalyzer(),
+        SizeAnalyzer(), MomentumAnalyzer(), BuzzAnalyzer(), InsiderAnalyzer(),
     ])
 
     ok = fail = skipped = 0
@@ -76,9 +76,7 @@ def run() -> None:
             skipped += 1
             continue
 
-        sleep_s = jitter_sleep()
-        log.info("[%s] 분석 시작 (pre-sleep %.1fs) [%d/%d]", ticker, sleep_s, ok + 1, MAX_BATCH)
-        time.sleep(sleep_s)  # Trends/Reddit 429 방지용 종목 전 jitter
+        log.info("[%s] 분석 시작 [%d/%d]", ticker, ok + 1, MAX_BATCH)
         try:
             result = engine.analyze(ticker)
             db.save_analysis(result, trigger_source="scheduled")

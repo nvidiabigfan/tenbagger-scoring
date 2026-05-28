@@ -18,10 +18,10 @@ from supabase import create_client
 from app.analyzers.analyst import AnalystAnalyzer
 from app.analyzers.buzz import BuzzAnalyzer
 from app.analyzers.etf import EtfAnalyzer
+from app.analyzers.insider import InsiderAnalyzer
+from app.analyzers.momentum import MomentumAnalyzer
 from app.analyzers.revenue import RevenueAccelerationAnalyzer
 from app.analyzers.size import SizeAnalyzer
-from app.analyzers.trends import TrendsAnalyzer, jitter_sleep
-from app.analyzers.youtube import YouTubeAnalyzer
 from app.core.email import send_score_alert
 from app.db import client as db
 from app.scoring.engine import ScoringEngine
@@ -131,7 +131,7 @@ def run() -> None:
 
     engine = ScoringEngine([
         RevenueAccelerationAnalyzer(), EtfAnalyzer(), AnalystAnalyzer(),
-        SizeAnalyzer(), TrendsAnalyzer(), BuzzAnalyzer(), YouTubeAnalyzer(),
+        SizeAnalyzer(), MomentumAnalyzer(), BuzzAnalyzer(), InsiderAnalyzer(),
     ])
 
     ok = fail = cached = 0
@@ -145,9 +145,7 @@ def run() -> None:
         old_score_pre = _get_previous_score(ticker)
 
         try:
-            sleep_s = jitter_sleep()
-            log.info("[%s] 분석 시작 (pre-sleep %.1fs)", ticker, sleep_s)
-            time.sleep(sleep_s)  # Trends 429 방지용 종목 전 jitter
+            log.info("[%s] 분석 시작", ticker)
             result = engine.analyze(ticker)
             db.save_analysis(result, trigger_source="scheduled")
             new_score = result.total_score

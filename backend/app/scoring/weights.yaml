@@ -15,17 +15,17 @@ modules:
     weight: 15
     enabled: true    # 시총 비대칭 — sweet spot $300M~$5B 우대
 
-  trends:
-    weight: 15
-    enabled: true    # Google Trends 관심 지속성
+  momentum:
+    weight: 10
+    enabled: true    # 주가 모멘텀 — Finviz Perf(1W/1M/3M)+RSI+52W Range
 
   buzz:
     weight: 10
     enabled: true    # Wikipedia 페이지뷰 기반 관심 증가
 
-  youtube:
-    weight: 0
-    enabled: false   # 쿼터 제한으로 비활성 (Phase 2에서 채널품질 개선 후 재활성)
+  insider:
+    weight: 5
+    enabled: true    # 내부자 거래 — Finviz Insider Trans (Form 4 기반)
 
 scoring:
   strong_buy_threshold: 75
