@@ -32,6 +32,24 @@ CREATE TABLE IF NOT EXISTS finviz_snapshots (
 CREATE INDEX IF NOT EXISTS idx_finviz_date ON finviz_snapshots(snapshot_date);
 
 -- ─────────────────────────────────────────────────────────────
+-- 분기 재무제표 (yfinance quarterly_income_stmt)
+-- Revenue 모듈 PIT 백테스트용
+-- period_end: 분기 마지막일 (2024-03-31 등)
+-- avail_date:  실제 사용 가능 일자 = period_end + 45일 (보수적 어닝 래그)
+-- ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS quarterly_fundamentals (
+    ticker          VARCHAR     NOT NULL,
+    period_end      DATE        NOT NULL,    -- 분기 말일 (e.g. 2024-03-31)
+    avail_date      DATE        NOT NULL,    -- period_end + 45일 (look-ahead 방지)
+    total_revenue   DOUBLE,                  -- 분기 총매출 (USD)
+    gross_profit    DOUBLE,
+    net_income      DOUBLE,
+    eps_diluted     DOUBLE,
+    PRIMARY KEY (ticker, period_end)
+);
+CREATE INDEX IF NOT EXISTS idx_qfund_avail ON quarterly_fundamentals(ticker, avail_date);
+
+-- ─────────────────────────────────────────────────────────────
 -- SEC EDGAR Form 4 (내부자 거래) 원시 데이터
 -- ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS form4_transactions (
