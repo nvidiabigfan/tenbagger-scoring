@@ -49,20 +49,27 @@ function scoreColor(s: number) {
 }
 
 const KEY_LABEL: Record<string, string> = {
-  net_ratio_1m:        "애널 1개월",
-  net_ratio_3m:        "애널 3개월",
-  net_ratio_6m:        "애널 6개월",
-  net_ratio_1y:        "애널 1년",
-  composite_net:       "애널 종합",
-  upside_pct:          "목표가 괴리",
-  inst_trans_pct:      "기관 순매수",
-  rel_volume:          "상대 거래량",
-  rate_3m:             "Trends 3개월",
-  rate_6m:             "Trends 6개월",
-  rate_1y:             "Trends 1년",
-  composite_rate:      "Trends 종합",
-  coverage_count_now:  "커버리지 수",
-  coverage_growth_3m:  "커버리지 증가(3m)",
+  net_ratio_1m:          "애널 1개월",
+  net_ratio_3m:          "애널 3개월",
+  net_ratio_6m:          "애널 6개월",
+  net_ratio_1y:          "애널 1년",
+  composite_net:         "애널 종합",
+  upside_pct:            "목표가 괴리",
+  inst_trans_pct:        "기관 순매수",
+  rel_volume:            "상대 거래량",
+  rate_3m:               "Trends 3개월",
+  rate_6m:               "Trends 6개월",
+  rate_1y:               "Trends 1년",
+  composite_rate:        "Trends 종합",
+  coverage_count_now:    "커버리지 수",
+  coverage_growth_3m:    "커버리지 증가(3m)",
+  mom_ratio:             "버즈 MoM",
+  consecutive_growth_3m: "3개월 연속상승",
+  transition_bonus:      "매출전환 보너스",
+  persistence_ratio:     "Trends 지속성",
+  eps_flip_bonus:        "EPS전환 보너스",
+  analyst_density_bonus: "애널 밀도",
+  news_count_30d:        "뉴스 수(30일)",
 };
 
 // evidence 값 포맷
@@ -70,6 +77,15 @@ function fmtEvidence(key: string, val: unknown): string | null {
   if (val === null || val === undefined) return null;
   const k = key.toLowerCase();
   if (typeof val === "number") {
+    // 배수 비율 → (val-1)×100 % 변화 표시
+    if (k === "mom_ratio" || k === "persistence_ratio") {
+      const sign = (val - 1) >= 0 ? "+" : "";
+      return `${sign}${((val - 1) * 100).toFixed(1)}%`;
+    }
+    // 보너스 점수 → +n.n 형식
+    if (k.includes("bonus")) {
+      return val > 0 ? `+${val.toFixed(1)}` : val.toFixed(1);
+    }
     // 소수 비율 → ×100해서 %
     if (k.includes("rate") || k.includes("ratio") || k === "composite_net") {
       const sign = val >= 0 ? "+" : "";
@@ -107,7 +123,8 @@ function EvidencePanel({ evidence }: { evidence: Record<string, unknown> }) {
 
   const isHighlight = (k: string) =>
     k.includes("rate") || k.includes("ratio") || k.includes("pct") ||
-    k === "composite_net" || k === "rel_volume" || k === "coverage_growth_3m";
+    k.includes("bonus") || k === "composite_net" || k === "rel_volume" ||
+    k === "coverage_growth_3m" || k === "consecutive_growth_3m";
 
   const highlights = entries.filter(([k]) => isHighlight(k));
   const rest = entries.filter(([k]) => !isHighlight(k));
