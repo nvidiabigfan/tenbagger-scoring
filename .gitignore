@@ -16,6 +16,11 @@ backend/htmlcov/
 backend/.coverage
 backend/dist/
 
+# Backtest warehouse (DuckDB + Parquet)
+backend/backtest/data/*.duckdb
+backend/backtest/data/*.duckdb.wal
+backend/backtest/data/parquet/
+
 # Node
 frontend/node_modules/
 frontend/.next/
