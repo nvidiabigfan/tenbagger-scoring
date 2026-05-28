@@ -42,7 +42,7 @@ _EPS_CONCEPTS = ["EarningsPerShareDiluted", "EarningsPerShareBasic"]
 
 def _get_cik_map() -> dict[str, str]:
     """ticker → 10자리 zero-padded CIK."""
-    resp = requests.get(f"{EDGAR_BASE}/files/company_tickers.json",
+    resp = requests.get("https://www.sec.gov/files/company_tickers.json",
                         headers=HEADERS, timeout=30)
     resp.raise_for_status()
     return {v["ticker"]: str(v["cik_str"]).zfill(10) for v in resp.json().values()}
@@ -185,7 +185,7 @@ def run(tickers: list[str] | None = None, start_year: int = 2014) -> None:
         total_rows += n
         ok += 1
 
-        if i % 100 == 0:
+        if i % 10 == 0:
             log.info("진행 %d/%d | ok=%d fail=%d skip=%d rows=%d",
                      i, len(tickers), ok, fail, skip, total_rows)
 
