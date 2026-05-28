@@ -143,7 +143,6 @@ def _upsert(con, rows: list[dict]) -> int:
                total_revenue, gross_profit, net_income, eps_diluted
         FROM _tmp_edgar
         ON CONFLICT (ticker, period_end) DO UPDATE SET
-            avail_date    = EXCLUDED.avail_date,
             total_revenue = COALESCE(EXCLUDED.total_revenue, quarterly_fundamentals.total_revenue),
             net_income    = COALESCE(EXCLUDED.net_income,    quarterly_fundamentals.net_income),
             eps_diluted   = COALESCE(EXCLUDED.eps_diluted,   quarterly_fundamentals.eps_diluted)
