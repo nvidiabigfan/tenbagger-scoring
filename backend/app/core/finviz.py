@@ -140,3 +140,21 @@ def parse_float(value: str | None) -> float | None:
         return float(cleaned)
     except ValueError:
         return None
+
+
+def parse_market_cap(value: str | None) -> float | None:
+    """'5.23T' → 5.23e12, '27.3B' → 2.73e10, '500M' → 5e8. None on failure."""
+    if not value or value in ("-", "N/A", ""):
+        return None
+    v = value.strip().upper()
+    multipliers = {"T": 1e12, "B": 1e9, "M": 1e6, "K": 1e3}
+    for suffix, mult in multipliers.items():
+        if v.endswith(suffix):
+            try:
+                return float(v[:-1]) * mult
+            except ValueError:
+                return None
+    try:
+        return float(v)
+    except ValueError:
+        return None

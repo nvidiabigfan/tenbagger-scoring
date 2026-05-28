@@ -123,10 +123,32 @@ class TrendsAnalyzer(Analyzer):
         # 정규화: rate ∈ [-1, +2] → score ∈ [0, 100]
         # rate=-1(관심 소멸)→0점, rate=0(보합)→33점, rate=+1(2배)→67점, rate=+2(3배)→100점
         raw_score = (composite_rate + 1.0) / 3.0 * 100.0
-        score = min(100.0, max(0.0, raw_score))
+        composite_score = min(100.0, max(0.0, raw_score))
 
-        # 절대 관심도 낮으면 신뢰도 하향 (noise 가능성)
+        # Persistence: 8주 median 비율 — 일시적 spike 아닌 지속적 증가 탐지
+        persistence_score = None
+        persistence_ratio = None
+        if n >= 16:
+            recent_8 = series.iloc[-8:]
+            prior_8  = series.iloc[-16:-8]
+            r_med = float(recent_8.median())
+            p_med = float(prior_8.median())
+            if p_med >= 1.0:
+                persistence_ratio = r_med / p_med
+                # ratio=0.5→0점, ratio=1.0→33점, ratio=1.5→67점, ratio=2.0→100점
+                persistence_score = min(100.0, max(0.0, (persistence_ratio - 0.5) / 1.5 * 100.0))
+
+        # 블렌딩: 분기 composite 65% + 8주 persistence 35%
+        if persistence_score is not None:
+            score = composite_score * 0.65 + persistence_score * 0.35
+        else:
+            score = composite_score
+        score = round(score, 2)
+
+        # 절대 관심도 낮으면 신뢰도 하향, persistence 고확인 시 상향
         confidence = 0.75 if q4_avg >= _MIN_INTEREST else 0.4
+        if persistence_ratio is not None and persistence_ratio > 1.2 and q4_avg >= _MIN_INTEREST:
+            confidence = min(0.88, confidence + 0.1)
 
         evidence: dict = {
             "keyword": kw,
@@ -136,6 +158,7 @@ class TrendsAnalyzer(Analyzer):
             "rate_3m": round(rate_3m, 3) if rate_3m is not None else None,
             "rate_6m": round(rate_6m, 3) if rate_6m is not None else None,
             "rate_1y": round(rate_1y, 3) if rate_1y is not None else None,
+            "persistence_ratio": round(persistence_ratio, 3) if persistence_ratio is not None else None,
             "weeks_fetched": n,
         }
         if q2_avg is not None:

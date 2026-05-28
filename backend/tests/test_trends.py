@@ -50,10 +50,10 @@ class TestRateCalculation:
         assert result.score < 33
 
     def test_strong_rise_score_near_100(self):
-        # 과거 10 → 현재 50 (5배): rate ≈ 4 → clamp to 100
+        # 과거 10 → 현재 50 (5배): composite=100, persistence 블렌딩 후 ≥75 (strong_buy)
         values = [10.0] * 39 + [50.0] * 13
         result = _run(values)
-        assert result.score >= 90
+        assert result.score >= 75
 
     def test_evidence_has_required_keys(self):
         values = [40.0] * 52

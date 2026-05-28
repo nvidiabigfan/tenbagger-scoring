@@ -1,20 +1,20 @@
-"""Wikipedia Pageviews 기반 버즈 분석 모듈 (BuzzAnalyzer).
+"""Wikipedia Pageviews + Yahoo Finance 뉴스량 기반 버즈 분석 모듈 (BuzzAnalyzer).
 
 소셜 감성 분석 대신 "관심 증가의 흔적"을 간접 측정.
-Wikipedia 공식 REST API 사용 — 인증 불필요, 레이트 리밋 없음.
-
-측정 방식:
-  - 최근 7일 평균 조회수 vs. 직전 21일 평균 조회수 비율
-  - ratio > 1 = 관심 증가, < 1 = 감소
-  - 절대 조회수가 매우 낮으면 confidence 하향 (노이즈 처리)
+  - Wikipedia 공식 REST API: 7일/21일 조회수 비율
+  - Yahoo Finance RSS: 최근 7일 뉴스 건수
+  - 블렌딩: 위키 70% + 뉴스 30%
 
 API 엔드포인트:
   Wikipedia search: en.wikipedia.org/w/api.php
   Pageviews:        wikimedia.org/api/rest_v1/metrics/pageviews/...
+  Yahoo RSS:        feeds.finance.yahoo.com/rss/2.0/headline
 """
 
 import logging
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from urllib.parse import quote
 
 import httpx
@@ -52,7 +52,7 @@ class BuzzAnalyzer(Analyzer):
         from app.core.finviz import get_stock_info
         try:
             info = get_stock_info(ticker)
-            company_name = info.get("company") or ticker
+            company_name = info.get("company_name") or ticker
         except Exception:
             company_name = ticker
 
@@ -76,8 +76,17 @@ class BuzzAnalyzer(Analyzer):
         prev_21   = sum(views[:-7]) / max(1, len(views) - 7)
         ratio     = recent_7 / max(1, prev_21)
 
-        # score: ratio=1(중립)→50, ratio=2→100, ratio=0.5→25
-        score = round(min(100.0, max(0.0, 50.0 * ratio)), 2)
+        # Wikipedia score: ratio=1(중립)→50, ratio=2→100, ratio=0.5→25
+        wiki_score = min(100.0, max(0.0, 50.0 * ratio))
+
+        # Yahoo Finance 뉴스량 보강
+        news_score, news_count, news_ok = self._get_news_score(ticker)
+
+        # 블렌딩: 위키 70% + 뉴스 30% (뉴스 성공 시)
+        if news_ok:
+            score = round(wiki_score * 0.7 + news_score * 0.3, 2)
+        else:
+            score = round(wiki_score, 2)
 
         # confidence: 절대 조회수 기준 (너무 낮으면 노이즈)
         avg_views = (recent_7 + prev_21) / 2
@@ -90,19 +99,51 @@ class BuzzAnalyzer(Analyzer):
         else:
             confidence = 0.0
 
+        evidence = {
+            "wiki_title": title,
+            "recent_7d_avg": round(recent_7, 1),
+            "prev_21d_avg": round(prev_21, 1),
+            "view_ratio": round(ratio, 3),
+            "days_collected": len(views),
+            "news_count_7d": news_count if news_ok else None,
+        }
+
         return AnalyzerResult(
             score=score,
             signal=_score_to_signal(score),
-            evidence={
-                "wiki_title": title,
-                "recent_7d_avg": round(recent_7, 1),
-                "prev_21d_avg": round(prev_21, 1),
-                "view_ratio": round(ratio, 3),
-                "days_collected": len(views),
-            },
+            evidence=evidence,
             confidence=confidence,
             timestamp=self.now_utc(),
         )
+
+    def _get_news_score(self, ticker: str) -> tuple[float, int, bool]:
+        """Yahoo Finance RSS — 최근 7일 뉴스 건수 기반 점수. (score, count, success)"""
+        try:
+            url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US"
+            headers = {"User-Agent": _USER_AGENT}
+            with httpx.Client(timeout=8, headers=headers) as client:
+                resp = client.get(url)
+                if resp.status_code != 200:
+                    return 0.0, 0, False
+            root = ET.fromstring(resp.text)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+            count = 0
+            for item in root.findall(".//item"):
+                pub_raw = item.findtext("pubDate", "")
+                try:
+                    pub_dt = parsedate_to_datetime(pub_raw)
+                    if pub_dt.tzinfo is None:
+                        pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+                    if pub_dt >= cutoff:
+                        count += 1
+                except Exception:
+                    count += 1
+            # 0건→0, 10건→50, 20건→100
+            score = min(100.0, count * 5.0)
+            return score, count, True
+        except Exception as e:
+            log.debug("BuzzAnalyzer news fetch [%s]: %s", ticker, e)
+            return 0.0, 0, False
 
     @retry(
         retry=retry_if_exception_type((httpx.TimeoutException, httpx.ConnectError)),

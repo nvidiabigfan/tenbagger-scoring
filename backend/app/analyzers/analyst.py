@@ -58,6 +58,11 @@ class AnalystAnalyzer(Analyzer):
         score = min(100.0, score + coverage_bonus)
         evidence.update(coverage_evidence)
 
+        # analyst density 보너스 (0~5점): 소형주에 analyst가 붙는 현상 탐지
+        density_bonus, density_evidence = _density_bonus(ratings_count_1y, metrics.get("Market Cap"))
+        score = min(100.0, score + density_bonus)
+        evidence.update(density_evidence)
+
         return AnalyzerResult(
             score=round(score, 2),
             signal=_score_to_signal(score),
@@ -123,6 +128,29 @@ def _coverage_bonus(ticker: str, current_count: int) -> tuple[float, dict]:
     except Exception as e:
         log.debug("coverage_bonus skip [%s]: %s", ticker, e)
         return 0.0, {"coverage_growth_3m": None, "coverage_count_now": current_count}
+
+
+def _density_bonus(analyst_count: int, market_cap_raw: str | None) -> tuple[float, dict]:
+    """시총 대비 analyst 수 밀도 보너스. 소형주에 analyst가 붙기 시작 = 초기 발견 신호."""
+    if analyst_count == 0 or not market_cap_raw:
+        return 0.0, {}
+    try:
+        mc = finviz.parse_market_cap(market_cap_raw)
+        if mc is None or mc <= 0:
+            return 0.0, {}
+        mc_b = mc / 1e9
+        if mc_b < 1:
+            tier_max, factor = 5.0, 0.50
+        elif mc_b < 10:
+            tier_max, factor = 4.0, 0.40
+        elif mc_b < 50:
+            tier_max, factor = 2.0, 0.20
+        else:
+            return 0.0, {}
+        bonus = min(tier_max, analyst_count * factor)
+        return round(bonus, 2), {"analyst_density_bonus": round(bonus, 2), "mc_billions": round(mc_b, 1)}
+    except Exception:
+        return 0.0, {}
 
 
 def _net_ratio(ratings: list[dict], months_back: int, months_end: int = 0) -> float | None:

@@ -84,11 +84,24 @@ class RevenueAccelerationAnalyzer(Analyzer):
         else:
             eps_score = 10.0  # 데이터 없으면 중립
 
-        score = round(sales_score + accel_score + eps_score, 2)
-
-        # confidence: baseline 있으면 높음
+        # neg→pos 전환 보너스: 성장 곡선이 꺾이는 순간 탐지
+        transition_bonus = 0.0
         if baseline_sales is not None:
-            confidence = 0.85
+            if baseline_sales <= 0 and sales_qoq > 0:
+                transition_bonus = 10.0  # 매출 음→양 전환
+            elif (sales_qoq - baseline_sales) > 50:
+                transition_bonus = 5.0   # 50%p 이상 급가속
+
+        eps_flip_bonus = 0.0
+        if eps_qoq is not None and baseline_eps is not None:
+            if baseline_eps <= 0 and eps_qoq > 0:
+                eps_flip_bonus = 5.0  # EPS 음→양 전환
+
+        score = round(min(100.0, sales_score + accel_score + eps_score + transition_bonus + eps_flip_bonus), 2)
+
+        # confidence: baseline 있으면 높음, 전환 감지 시 상향
+        if baseline_sales is not None:
+            confidence = 0.9 if transition_bonus > 0 else 0.85
         else:
             confidence = 0.6
 
@@ -106,6 +119,8 @@ class RevenueAccelerationAnalyzer(Analyzer):
                 "sales_score": round(sales_score, 2),
                 "accel_score": round(accel_score, 2),
                 "eps_score": round(eps_score, 2),
+                "transition_bonus": transition_bonus if transition_bonus > 0 else None,
+                "eps_flip_bonus": eps_flip_bonus if eps_flip_bonus > 0 else None,
             },
             confidence=confidence,
             timestamp=self.now_utc(),
