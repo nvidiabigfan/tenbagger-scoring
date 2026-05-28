@@ -10,9 +10,11 @@ import duckdb
 import pandas as pd
 
 # AAPL을 기준 거래일 달력으로 사용 (상장 10년+ 연속 거래)
+# params: [start, end, lookback_start, end]
+# lookback_start = start - 400days (52W warmup용)
 _FEATURES_SQL = """
 WITH
--- 월말 기준일: AAPL 기준 각 (연, 월)의 마지막 거래일
+-- 월말 기준일: AAPL 기준 각 (연, 월)의 마지막 거래일 (start~end 범위만)
 month_ends AS (
     SELECT MAX(date) AS eom_date
     FROM prices
@@ -21,7 +23,8 @@ month_ends AS (
     GROUP BY YEAR(date), MONTH(date)
 ),
 
--- 가격 window features (perf / forward return / 52W 범위 / delta)
+-- 가격 window features (lookback_start~end 범위만 읽어 메모리 절약)
+-- perf / forward return / 52W 범위 / delta
 base AS (
     SELECT
         p.ticker,
@@ -44,6 +47,7 @@ base AS (
         -- RSI delta
         p.adj_close - LAG(p.adj_close, 1) OVER w AS delta
     FROM prices p
+    WHERE p.date BETWEEN ?::DATE AND ?::DATE   -- lookback_start ~ end
     WINDOW w AS (PARTITION BY p.ticker ORDER BY p.date)
 ),
 
@@ -93,6 +97,9 @@ def compute_features(
 ) -> pd.DataFrame:
     """월말 기준 momentum features 추출.
 
+    prices 테이블을 [start-400d, end] 범위로만 읽어 메모리 사용량 최소화.
+    (52W range warmup: 252 거래일 ≈ 400 calendar days)
+
     Returns:
         DataFrame with columns:
             ticker, as_of_date,
@@ -100,4 +107,6 @@ def compute_features(
             fwd_1m, fwd_3m, fwd_6m, fwd_12m,
             range_pos_52w (0~1), rsi_14
     """
-    return con.execute(_FEATURES_SQL, [start, end]).df()
+    # 52W range + RSI 워밍업을 위해 start보다 400일 앞에서부터 읽기
+    lookback = (pd.Timestamp(start) - pd.Timedelta(days=400)).strftime("%Y-%m-%d")
+    return con.execute(_FEATURES_SQL, [start, end, lookback, end]).df()

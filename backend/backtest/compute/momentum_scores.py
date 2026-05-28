@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+from datetime import date
 
 import numpy as np
 import pandas as pd
@@ -215,14 +216,34 @@ def _print_report(df: pd.DataFrame) -> None:
 
 # ── main ──────────────────────────────────────────────────────────────────
 
-def run(start: str = "2015-01-01") -> None:
-    log.info("Momentum 백테스트 시작 (from %s)", start)
+def run(start: str = "2015-01-01", batch_years: bool = True) -> None:
+    log.info("Momentum 백테스트 시작 (from %s, batch_years=%s)", start, batch_years)
     con = duckdb_store.connect()
+    con.execute("SET memory_limit='800MB'")
 
-    log.info("월말 features 추출 중 (DuckDB window functions)...")
-    feats = compute_features(con, start=start)
+    if batch_years:
+        import datetime
+        start_yr = int(start[:4])
+        end_yr   = datetime.date.today().year
+        all_feats = []
+        for yr in range(start_yr, end_yr + 1):
+            yr_start = f"{yr}-01-01"
+            # window 함수에 충분한 선행 데이터 확보 위해 전년 10월부터 로드
+            yr_start_with_buf = f"{yr - 1}-10-01"
+            yr_end   = f"{yr}-12-31"
+            log.info("  배치: %d년 처리 중...", yr)
+            chunk = compute_features(con, start=yr_start_with_buf, end=yr_end)
+            # 선행 버퍼(전년 데이터) 제거 — 실제 대상 연도만 유지
+            chunk = chunk[chunk["as_of_date"].astype(str) >= yr_start]
+            all_feats.append(chunk)
+            log.info("    → %d rows", len(chunk))
+        feats = pd.concat(all_feats, ignore_index=True)
+    else:
+        log.info("월말 features 추출 중 (단일 쿼리)...")
+        feats = compute_features(con, start=start)
+
     log.info(
-        "  features: %d rows | tickers=%d | dates=%d",
+        "features 합계: %d rows | tickers=%d | dates=%d",
         len(feats), feats["ticker"].nunique(), feats["as_of_date"].nunique(),
     )
 
@@ -230,7 +251,7 @@ def run(start: str = "2015-01-01") -> None:
 
     n_ms = _upsert_module_scores(con, feats)
     n_fr = _upsert_forward_returns(con, feats)
-    log.info("  저장: module_scores=%d, forward_returns=%d", n_ms, n_fr)
+    log.info("저장: module_scores=%d, forward_returns=%d", n_ms, n_fr)
 
     _print_report(feats)
 
@@ -241,5 +262,6 @@ def run(start: str = "2015-01-01") -> None:
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description="Momentum IC backtest")
     p.add_argument("--start", default="2015-01-01", help="백테스트 시작일 (default: 2015-01-01)")
+    p.add_argument("--no-batch", action="store_true", help="연도별 배치 분할 비활성화 (단일 쿼리)")
     args = p.parse_args()
-    run(start=args.start)
+    run(start=args.start, batch_years=not args.no_batch)
