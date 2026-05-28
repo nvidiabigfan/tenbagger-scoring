@@ -15,7 +15,7 @@ import argparse
 import logging
 import os
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 import pandas as pd
 import yfinance as yf
@@ -66,8 +66,9 @@ def _flatten(df: pd.DataFrame, tickers: list[str]) -> pd.DataFrame:
         if sub.empty:
             continue
         sub["ticker"] = ticker
+        # yfinance 0.2.x → "Date" / 1.x → "index" (index.name이 None)
         sub = sub.rename(columns={
-            "Date": "date",
+            "Date": "date", "index": "date", "Datetime": "date",
             "Open": "open", "High": "high", "Low": "low",
             "Close": "close", "Adj Close": "adj_close",
             "Volume": "volume",
@@ -98,7 +99,7 @@ def run(start: str = "2014-01-01", batch_size: int = 50, inter_batch_sleep: floa
     log.info("Universe: %d tickers", len(universe))
 
     con = duckdb_store.connect()
-    end = datetime.utcnow().strftime("%Y-%m-%d")
+    end = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     total_rows = 0
     for i in range(0, len(universe), batch_size):
