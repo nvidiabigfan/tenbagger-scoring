@@ -75,7 +75,7 @@ class BuzzAnalyzer(Analyzer):
         n = len(views)
         m1_avg = sum(views[-30:]) / 30                                              # 최근 30일
         m2_avg = sum(views[-60:-30]) / 30 if n >= 60 else sum(views[:-30]) / max(1, n - 30)  # 직전 30일
-        m3_avg = sum(views[-90:-60]) / 30 if n >= 90 else None                     # 2개월 전
+        m3_avg = sum(views[-90:-60]) / 30 if n >= 85 else None                     # 2개월 전 (API 지연 허용)
 
         # MoM 비율: recent_30d / prior_30d
         mom_ratio = m1_avg / max(1.0, m2_avg)
