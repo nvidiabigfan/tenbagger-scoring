@@ -1,0 +1,31 @@
+name: Weekly Score History Snapshot
+
+on:
+  schedule:
+    - cron: '0 1 * * 1'  # UTC 01:00 월요일 = KST 10:00 월요일
+  workflow_dispatch:
+
+jobs:
+  score-history-snapshot:
+    name: Score History Snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Run score history snapshot
+        working-directory: backend
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python -m app.jobs.score_history_batch
