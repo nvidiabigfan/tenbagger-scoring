@@ -70,6 +70,14 @@ const KEY_LABEL: Record<string, string> = {
   eps_flip_bonus:        "EPS전환 보너스",
   analyst_density_bonus: "애널 밀도",
   news_count_30d:        "뉴스 수(30일)",
+  perf_1w:               "수익률 1주",
+  perf_1m:               "수익률 1개월",
+  perf_3m:               "수익률 3개월",
+  perf_composite:        "모멘텀 종합",
+  rsi:                   "RSI(14)",
+  range_52w:             "52주 위치",
+  insider_trans_pct:     "내부자 순매수",
+  insider_own_pct:       "내부자 보유",
 };
 
 // evidence 값 포맷
@@ -92,7 +100,8 @@ function fmtEvidence(key: string, val: unknown): string | null {
       return `${sign}${(val * 100).toFixed(1)}%`;
     }
     // 이미 % 단위
-    if (k.includes("pct") || k === "coverage_growth_3m") {
+    if (k.includes("pct") || k === "coverage_growth_3m" ||
+        k === "perf_1w" || k === "perf_1m" || k === "perf_3m") {
       const sign = val >= 0 ? "+" : "";
       return `${sign}${val.toFixed(1)}%`;
     }
@@ -124,7 +133,8 @@ function EvidencePanel({ evidence }: { evidence: Record<string, unknown> }) {
   const isHighlight = (k: string) =>
     k.includes("rate") || k.includes("ratio") || k.includes("pct") ||
     k.includes("bonus") || k === "composite_net" || k === "rel_volume" ||
-    k === "coverage_growth_3m" || k === "consecutive_growth_3m";
+    k === "coverage_growth_3m" || k === "consecutive_growth_3m" ||
+    k === "perf_1w" || k === "perf_1m" || k === "perf_3m";
 
   const highlights = entries.filter(([k]) => isHighlight(k));
   const rest = entries.filter(([k]) => !isHighlight(k));
