@@ -320,6 +320,10 @@ def run(start: str = "2015-01-01") -> None:
         con.close()
         return
 
+    # py 서브쿼리에서 동일 (ticker, as_of_date)에 다중 prior year 매칭 가능 → dedup
+    df = df.drop_duplicates(subset=["ticker", "as_of_date"])
+    log.info("  dedup 후: %d rows", len(df))
+
     df["score"] = compute_scores(df)
 
     # forward_returns JOIN
