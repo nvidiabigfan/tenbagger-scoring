@@ -5,6 +5,126 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 
+interface GrowthContext {
+  available: boolean;
+  currentScore?: number;
+  topPct?: number;
+  universeSize?: number;
+  delta?: number | null;
+  history?: { week_date: string; total_score: number }[];
+}
+
+function growthLabel(topPct: number, delta: number | null) {
+  if (topPct <= 15 && delta !== null && delta >= 5)
+    return { text: "🔥 폭발적 성장", cls: "bg-orange-50 border-orange-200 text-orange-700" };
+  if (topPct <= 15)
+    return { text: "★ 최상위 유지", cls: "bg-green-50 border-green-200 text-green-700" };
+  if (topPct <= 40 && delta !== null && delta >= 5)
+    return { text: "↑ 성장 가속", cls: "bg-blue-50 border-blue-200 text-blue-700" };
+  if (topPct <= 40)
+    return { text: "→ 성장 중", cls: "bg-blue-50 border-blue-100 text-blue-600" };
+  if (delta !== null && delta <= -5)
+    return { text: "↓ 성장 둔화", cls: "bg-red-50 border-red-200 text-red-600" };
+  return { text: "— 정체", cls: "bg-gray-50 border-gray-200 text-gray-500" };
+}
+
+function Sparkline({ data }: { data: number[] }) {
+  const W = 240, H = 52, PAD = 4;
+  const scores = data.map((d) => d);
+  const min = Math.min(...scores, 0);
+  const max = Math.max(...scores, 1);
+  const range = max - min || 1;
+  const toY = (v: number) => PAD + (H - PAD * 2) * (1 - (v - min) / range);
+  const toX = (i: number) => scores.length < 2 ? W / 2 : (i / (scores.length - 1)) * W;
+
+  const pts = scores.map((v, i) => `${toX(i)},${toY(v)}`).join(" ");
+  const last = { x: toX(scores.length - 1), y: toY(scores[scores.length - 1]) };
+
+  // 그라데이션 영역
+  const areaPath =
+    `M ${toX(0)},${H} ` +
+    scores.map((v, i) => `L ${toX(i)},${toY(v)}`).join(" ") +
+    ` L ${toX(scores.length - 1)},${H} Z`;
+
+  return (
+    <svg width={W} height={H} className="overflow-visible">
+      <defs>
+        <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={areaPath} fill="url(#sg)" />
+      {scores.length >= 2 && (
+        <polyline points={pts} fill="none" stroke="#3b82f6" strokeWidth="2"
+          strokeLinejoin="round" strokeLinecap="round" />
+      )}
+      <circle cx={last.x} cy={last.y} r="4" fill="#3b82f6" />
+    </svg>
+  );
+}
+
+function GrowthContextCard({ ctx }: { ctx: GrowthContext }) {
+  if (!ctx.available || ctx.topPct === undefined) return null;
+  const delta = ctx.delta ?? null;
+  const label = growthLabel(ctx.topPct, delta);
+  const scores = ctx.history?.map((h) => h.total_score) ?? [];
+  const weeks = ctx.history?.map((h) => {
+    const d = new Date(h.week_date);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  }) ?? [];
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
+      {/* 레이블 + 분위수 + 변화량 */}
+      <div className="flex items-center justify-between mb-4">
+        <span className={`inline-block px-3 py-1 rounded-full text-sm font-bold border ${label.cls}`}>
+          {label.text}
+        </span>
+        <div className="text-right">
+          <div className="text-xs text-gray-400">전체 {ctx.universeSize}종목 중</div>
+          <div className="text-lg font-black text-gray-800">상위 {ctx.topPct}%</div>
+        </div>
+      </div>
+
+      {/* 전주 대비 */}
+      {delta !== null && (
+        <div className="flex items-center gap-1.5 mb-4">
+          <span className="text-xs text-gray-400">전주 대비</span>
+          <span className={`text-sm font-bold tabular-nums ${delta >= 0 ? "text-green-600" : "text-red-500"}`}>
+            {delta >= 0 ? `+${delta}` : delta}점
+          </span>
+          {Math.abs(delta) >= 5 && (
+            <span className="text-[10px] text-gray-400">(유의미한 변화)</span>
+          )}
+        </div>
+      )}
+
+      {/* 추이 차트 */}
+      {scores.length >= 1 && (
+        <div>
+          <div className="text-[10px] text-gray-400 mb-1">
+            {scores.length}주 점수 추이
+          </div>
+          <Sparkline data={scores} />
+          {weeks.length >= 2 && (
+            <div className="flex justify-between text-[9px] text-gray-300 mt-1" style={{ width: 240 }}>
+              <span>{weeks[0]}</span>
+              <span>{weeks[weeks.length - 1]}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {scores.length < 2 && (
+        <p className="text-[10px] text-gray-300 mt-2">
+          추이 그래프는 2주 이상 데이터 누적 후 표시됩니다.
+        </p>
+      )}
+    </div>
+  );
+}
+
 interface ModuleResult {
   score: number;
   signal: string;
@@ -196,6 +316,7 @@ export default function AnalyzePage() {
   const [user, setUser] = useState<User | null>(null);
   const [inWatchlist, setInWatchlist] = useState(false);
   const [wlLoading, setWlLoading] = useState(false);
+  const [growthCtx, setGrowthCtx] = useState<GrowthContext | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -225,6 +346,13 @@ export default function AnalyzePage() {
     }
     setWlLoading(false);
   };
+
+  useEffect(() => {
+    fetch(`/api/growth-context/${ticker}`)
+      .then((r) => r.json())
+      .then(setGrowthCtx)
+      .catch(() => {});
+  }, [ticker]);
 
   useEffect(() => {
     fetch(`/api/analyze/${ticker}`, { method: "POST" })
@@ -303,6 +431,9 @@ export default function AnalyzePage() {
           <span>{new Date(result.analyzed_at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
         </div>
       </div>
+
+      {/* Growth Context Card */}
+      {growthCtx && <GrowthContextCard ctx={growthCtx} />}
 
       {/* Module Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
