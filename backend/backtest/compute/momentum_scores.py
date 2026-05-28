@@ -2,7 +2,8 @@
 
 가격 데이터 → 월말 Momentum 점수 계산 → IC/Decile 분석.
 
-로직: momentum.py와 동일 (perf 50% + RSI 30% + 52W 20%).
+로직: 순수 price momentum — RSI 제거 (IC 분석 결과 D10 패널티 확인)
+  perf_3m(50%) + perf_1m(30%) + 52W_range(20%)
 데이터: DuckDB prices 테이블 (Finviz 불필요 — PIT 완전 보장).
 
 결과: module_scores + forward_returns 저장 후 IC/Decile 리포트 출력.
@@ -27,47 +28,32 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger(__name__)
 
 
-# ── 스코어링 (momentum.py와 동일 로직, numpy 벡터화) ─────────────────────
+# ── 스코어링 (순수 price momentum — RSI 제거) ────────────────────────────
 
 def _perf_score_np(pct: pd.Series) -> pd.Series:
-    """수익률 fraction(-0.3=0pt, 0=50pt, +0.3=100pt)."""
+    """수익률 fraction → 0~100점. -30%=0, 0%=50, +30%=100."""
     return np.clip((pct * 100 + 30) / 60 * 100, 0, 100)
 
 
-def _rsi_score_np(rsi: pd.Series) -> pd.Series:
-    """RSI → 0~100점. 45~65 구간 = 100."""
-    r = np.where(
-        (rsi >= 45) & (rsi <= 65), 100.0,
-        np.where(
-            (rsi >= 30) & (rsi < 45),  50.0 + (rsi - 30) / 15 * 50,
-            np.where(
-                (rsi > 65) & (rsi <= 75), 100.0 - (rsi - 65) / 10 * 50,
-                np.clip(30.0 - np.abs(rsi - 50) * 0.5, 0, None),
-            ),
-        ),
-    )
-    return pd.Series(r, index=rsi.index)
-
-
 def compute_scores(df: pd.DataFrame) -> pd.Series:
-    """features DataFrame → momentum score Series (0~100)."""
-    ps1w = _perf_score_np(df["perf_1w"])
+    """features DataFrame → momentum score Series (0~100).
+
+    perf_3m(50%) + perf_1m(30%) + 52W_range(20%).
+    RSI 제거: IC 분석에서 RSI 45~65 sweet-spot이 고모멘텀 D10에 페널티 부여 확인.
+    """
     ps1m = _perf_score_np(df["perf_1m"])
     ps3m = _perf_score_np(df["perf_3m"])
 
-    # 가중평균 (NaN 종목은 해당 가중치 0 처리)
-    mask1w = df["perf_1w"].notna().astype(float)
     mask1m = df["perf_1m"].notna().astype(float)
     mask3m = df["perf_3m"].notna().astype(float)
 
-    numer = ps1w.fillna(0) * 0.30 * mask1w + ps1m.fillna(0) * 0.40 * mask1m + ps3m.fillna(0) * 0.30 * mask3m
-    denom = mask1w * 0.30 + mask1m * 0.40 + mask3m * 0.30
+    numer = ps1m.fillna(0) * 0.30 * mask1m + ps3m.fillna(0) * 0.50 * mask3m
+    denom = mask1m * 0.30 + mask3m * 0.50
     perf_composite = np.where(denom > 0, numer / denom, 50.0)
 
-    rsi_s   = _rsi_score_np(df["rsi_14"].fillna(50.0))
     range_s = df["range_pos_52w"].fillna(0.5) * 100.0
 
-    score = perf_composite * 0.50 + rsi_s * 0.30 + range_s * 0.20
+    score = perf_composite * 0.80 + range_s * 0.20
     return pd.Series(np.round(score, 2), index=df.index)
 
 
