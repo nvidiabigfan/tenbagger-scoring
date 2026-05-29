@@ -40,11 +40,20 @@ function RankBadge({ rank }: { rank: number }) {
 }
 
 export default async function RankingPage() {
-  const today = new Date().toISOString().split("T")[0];
+  // 가장 최근 snapshot 날짜 먼저 조회
+  const { data: latestRow } = await supabase
+    .from("ranking_snapshots")
+    .select("date")
+    .order("date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const latestDate = latestRow?.date ?? new Date().toISOString().split("T")[0];
+
   const { data } = await supabase
     .from("ranking_snapshots")
     .select("rank, ticker, score, rank_change, stocks(company_name, sector)")
-    .eq("date", today)
+    .eq("date", latestDate)
     .order("rank", { ascending: true });
 
   const rows = (data ?? []) as unknown as RankRow[];
@@ -56,7 +65,7 @@ export default async function RankingPage() {
           <h1 className="text-2xl font-bold text-gray-900">스코어 상위 100</h1>
           <p className="text-xs text-gray-400 mt-0.5">텐배거 가능성 점수 기준 (0~100점)</p>
         </div>
-        <span className="text-sm text-gray-400">{today} 기준</span>
+        <span className="text-sm text-gray-400">{latestDate} 기준</span>
       </div>
 
       {rows.length === 0 ? (
