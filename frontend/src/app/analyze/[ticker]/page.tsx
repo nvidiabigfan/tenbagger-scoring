@@ -155,8 +155,10 @@ const MODULE_LABEL: Record<string, string> = {
   etf:      "기관 수급 변화",
   analyst:  "애널리스트 컨센서스",
   size:     "시총 비대칭",
-  trends:   "Google Trends 지속성",
+  momentum: "주가 모멘텀",
   buzz:     "Wikipedia 관심 증가",
+  insider:  "내부자 거래",
+  trends:   "Google Trends 지속성",
   youtube:  "YouTube 주목도",
 };
 
