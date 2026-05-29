@@ -29,7 +29,7 @@ function growthLabel(topPct: number, delta: number | null) {
 }
 
 function Sparkline({ data }: { data: number[] }) {
-  const W = 240, H = 52, PAD = 4;
+  const W = 240, H = 40, PAD = 3;
   const scores = data.map((d) => d);
   const min = Math.min(...scores, 0);
   const max = Math.max(...scores, 1);
@@ -74,40 +74,31 @@ function GrowthContextCard({ ctx }: { ctx: GrowthContext }) {
   }) ?? [];
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
-      {/* 레이블 + 분위수 + 변화량 */}
-      <div className="flex items-center justify-between mb-4">
-        <span className={`inline-block px-3 py-1 rounded-full text-sm font-bold border ${label.cls}`}>
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-3">
+      {/* 레이블 + 분위수 한 줄 */}
+      <div className="flex items-center justify-between mb-2">
+        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${label.cls}`}>
           {label.text}
         </span>
-        <div className="text-right">
-          <div className="text-xs text-gray-400">전체 {ctx.universeSize}종목 중</div>
-          <div className="text-lg font-black text-gray-800">상위 {ctx.topPct}%</div>
+        <div className="flex items-center gap-2">
+          {delta !== null && (
+            <span className={`text-xs font-semibold tabular-nums ${delta >= 0 ? "text-green-600" : "text-red-500"}`}>
+              {delta >= 0 ? `+${delta}` : delta}점
+            </span>
+          )}
+          <div className="text-right">
+            <div className="text-[10px] text-gray-400">전체 {ctx.universeSize}종목 중</div>
+            <div className="text-sm font-black text-gray-800">상위 {ctx.topPct}%</div>
+          </div>
         </div>
       </div>
-
-      {/* 전주 대비 */}
-      {delta !== null && (
-        <div className="flex items-center gap-1.5 mb-4">
-          <span className="text-xs text-gray-400">전주 대비</span>
-          <span className={`text-sm font-bold tabular-nums ${delta >= 0 ? "text-green-600" : "text-red-500"}`}>
-            {delta >= 0 ? `+${delta}` : delta}점
-          </span>
-          {Math.abs(delta) >= 5 && (
-            <span className="text-[10px] text-gray-400">(유의미한 변화)</span>
-          )}
-        </div>
-      )}
 
       {/* 추이 차트 */}
       {scores.length >= 1 && (
         <div className="w-full overflow-hidden">
-          <div className="text-[10px] text-gray-400 mb-1">
-            {scores.length}주 점수 추이
-          </div>
           <Sparkline data={scores} />
           {weeks.length >= 2 && (
-            <div className="flex justify-between text-[9px] text-gray-300 mt-1 w-full">
+            <div className="flex justify-between text-[9px] text-gray-300 mt-0.5 w-full">
               <span>{weeks[0]}</span>
               <span>{weeks[weeks.length - 1]}</span>
             </div>
@@ -116,7 +107,7 @@ function GrowthContextCard({ ctx }: { ctx: GrowthContext }) {
       )}
 
       {scores.length < 2 && (
-        <p className="text-[10px] text-gray-300 mt-2">
+        <p className="text-[10px] text-gray-300 mt-1">
           추이 그래프는 2주 이상 데이터 누적 후 표시됩니다.
         </p>
       )}
@@ -398,19 +389,19 @@ export default function AnalyzePage() {
       {/* Back */}
       <button
         onClick={() => router.push("/")}
-        className="text-sm text-gray-400 hover:text-gray-700 mb-6 flex items-center gap-1"
+        className="text-xs text-gray-400 hover:text-gray-700 mb-3 flex items-center gap-1"
       >
         ← 다른 종목 검색
       </button>
 
       {/* Score Card */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8 mb-6 text-center">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-5 mb-3">
         <div className="flex items-center justify-between mb-1">
-          <h1 className="text-3xl font-bold text-gray-900">{result.ticker}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{result.ticker}</h1>
           <button
             onClick={toggleWatchlist}
             disabled={wlLoading}
-            className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${
+            className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
               inWatchlist
                 ? "border-blue-300 text-blue-600 bg-blue-50 hover:bg-red-50 hover:text-red-500 hover:border-red-200"
                 : "border-gray-200 text-gray-500 hover:border-blue-300 hover:text-blue-600"
@@ -420,16 +411,16 @@ export default function AnalyzePage() {
             {inWatchlist ? "★ 추가됨" : "☆ 워치리스트"}
           </button>
         </div>
-        <div className={`text-6xl sm:text-8xl font-black my-5 tabular-nums ${scoreColor(result.total_score)}`}>
+        <div className={`text-5xl sm:text-6xl font-black my-3 tabular-nums text-center ${scoreColor(result.total_score)}`}>
           {result.total_score}
         </div>
-        <span className={`inline-block px-4 py-1.5 rounded-full text-sm font-semibold ${sig.cls}`}>
-          {sig.label}
-        </span>
-        <div className="mt-3 flex justify-center gap-6 text-sm text-gray-400">
-          <span>신뢰도 {(result.confidence * 100).toFixed(0)}%</span>
-          <span>{result.from_cache ? "캐시" : "신규 분석"}</span>
-          <span>{new Date(result.analyzed_at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+        <div className="flex items-center justify-center gap-3">
+          <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${sig.cls}`}>
+            {sig.label}
+          </span>
+          <span className="text-xs text-gray-400">신뢰도 {(result.confidence * 100).toFixed(0)}%</span>
+          <span className="text-xs text-gray-400">{result.from_cache ? "캐시" : "신규"}</span>
+          <span className="text-xs text-gray-400">{new Date(result.analyzed_at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
         </div>
       </div>
 
@@ -437,24 +428,24 @@ export default function AnalyzePage() {
       {growthCtx && <GrowthContextCard ctx={growthCtx} />}
 
       {/* Module Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-2 gap-2 mb-3">
         {Object.entries(result.modules).map(([name, m]) => {
           const ms = SIGNAL[m.signal] ?? { label: m.signal, cls: "bg-gray-100 text-gray-700" };
           return (
-            <div key={name} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-              <div className="flex justify-between items-center mb-3">
+            <div key={name} className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
+              <div className="flex justify-between items-start mb-1.5">
                 <div>
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{name}</span>
+                  <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">{name}</span>
                   {MODULE_LABEL[name] && (
-                    <div className="text-[10px] text-gray-400 mt-0.5">{MODULE_LABEL[name]}</div>
+                    <div className="text-[10px] text-gray-400">{MODULE_LABEL[name]}</div>
                   )}
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ms.cls}`}>{ms.label}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ml-1 ${ms.cls}`}>{ms.label}</span>
               </div>
-              <div className={`text-4xl font-bold ${scoreColor(m.score)}`}>{m.score}</div>
+              <div className={`text-3xl font-bold ${scoreColor(m.score)}`}>{m.score}</div>
 
               {/* 점수 바 */}
-              <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div className="mt-1.5 h-1 bg-gray-100 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all ${
                     m.score >= 80 ? "bg-green-400" : m.score >= 60 ? "bg-blue-400" : m.score >= 40 ? "bg-yellow-400" : "bg-red-400"
@@ -463,7 +454,7 @@ export default function AnalyzePage() {
                 />
               </div>
 
-              <div className="text-xs text-gray-400 mt-1">신뢰도 {(m.confidence * 100).toFixed(0)}%</div>
+              <div className="text-[10px] text-gray-400 mt-1">신뢰도 {(m.confidence * 100).toFixed(0)}%</div>
 
               {/* Evidence 패널 */}
               {m.evidence && Object.keys(m.evidence).length > 0 && (
@@ -475,14 +466,14 @@ export default function AnalyzePage() {
       </div>
 
       {/* Report */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4 uppercase tracking-wide">분석 리포트</h2>
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <h2 className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wide">분석 리포트</h2>
         <pre className="text-xs text-gray-600 whitespace-pre-wrap font-mono leading-relaxed">
           {result.report_md}
         </pre>
       </div>
 
-      <p className="text-center text-xs text-gray-300 mt-8">
+      <p className="text-center text-xs text-gray-300 mt-4 mb-2">
         본 서비스는 투자 자문이 아니며 참고용입니다.
       </p>
     </div>
