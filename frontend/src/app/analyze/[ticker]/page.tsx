@@ -153,6 +153,18 @@ const MODULE_LABEL: Record<string, string> = {
   youtube:  "YouTube 주목도",
 };
 
+const MODULE_WEIGHT: Record<string, number> = {
+  revenue:  25,
+  etf:      20,
+  analyst:  15,
+  size:     15,
+  momentum: 10,
+  buzz:     10,
+  insider:  5,
+  trends:   15,
+  youtube:  10,
+};
+
 function scoreColor(s: number) {
   if (s >= 80) return "text-green-600";
   if (s >= 60) return "text-blue-600";
@@ -438,6 +450,9 @@ export default function AnalyzePage() {
                   <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">{name}</span>
                   {MODULE_LABEL[name] && (
                     <div className="text-[10px] text-gray-400">{MODULE_LABEL[name]}</div>
+                  )}
+                  {MODULE_WEIGHT[name] !== undefined && (
+                    <div className="text-[9px] text-gray-300 mt-0.5">배점 {MODULE_WEIGHT[name]}점</div>
                   )}
                 </div>
                 <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ml-1 ${ms.cls}`}>{ms.label}</span>

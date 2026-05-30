@@ -11,6 +11,14 @@ interface RankRow {
   stocks: { company_name: string; sector: string } | null;
 }
 
+function stalenessInfo(analyzedAt: string | undefined): { label: string; cls: string } | null {
+  if (!analyzedAt) return null;
+  const diffDays = (Date.now() - new Date(analyzedAt).getTime()) / 86400000;
+  if (diffDays < 1) return null; // 오늘 분석 — 표시 불필요
+  if (diffDays < 3) return { label: `${Math.floor(diffDays)}일 전`, cls: "text-gray-300" };
+  return { label: `${Math.floor(diffDays)}일 전`, cls: "text-orange-400 font-medium" };
+}
+
 function scoreSignal(score: number): { label: string; cls: string } {
   if (score >= 75) return { label: "강한 주목", cls: "bg-green-100 text-green-700" };
   if (score >= 55) return { label: "긍정 시그널", cls: "bg-blue-100 text-blue-600" };
@@ -57,6 +65,22 @@ export default async function RankingPage() {
     .order("rank", { ascending: true });
 
   const rows = (data ?? []) as unknown as RankRow[];
+
+  // 각 ticker의 최신 분석일 조회 (stale 표시용)
+  const tickerList = rows.map((r) => r.ticker);
+  const { data: analysisRows } = tickerList.length > 0
+    ? await supabase
+        .from("analysis_results")
+        .select("ticker, analyzed_at")
+        .in("ticker", tickerList)
+        .order("analyzed_at", { ascending: false })
+        .limit(tickerList.length * 3)
+    : { data: [] };
+
+  const analyzedAtMap: Record<string, string> = {};
+  for (const ar of (analysisRows ?? [])) {
+    if (!analyzedAtMap[ar.ticker]) analyzedAtMap[ar.ticker] = ar.analyzed_at;
+  }
 
   return (
     <div>
@@ -116,6 +140,7 @@ export default async function RankingPage() {
                   <th className="px-4 py-3 text-left text-gray-500 font-medium">점수</th>
                   <th className="px-4 py-3 text-left text-gray-500 font-medium hidden sm:table-cell">시그널</th>
                   <th className="px-4 py-3 text-right text-gray-500 font-medium w-14">변동</th>
+                  <th className="px-4 py-3 text-right text-gray-500 font-medium w-16 hidden sm:table-cell">분석일</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -131,6 +156,7 @@ export default async function RankingPage() {
                           {row.ticker}
                         </Link>
                       </td>
+
                       <td className="px-4 py-2.5 text-gray-500 truncate max-w-36">
                         {row.stocks?.company_name ?? "-"}
                       </td>
@@ -165,6 +191,13 @@ export default async function RankingPage() {
                         ) : (
                           <span className="text-gray-300">-</span>
                         )}
+                      </td>
+                      <td className="px-4 py-2.5 text-right hidden sm:table-cell">
+                        {(() => {
+                          const info = stalenessInfo(analyzedAtMap[row.ticker]);
+                          if (!info) return <span className="text-gray-300 text-xs">오늘</span>;
+                          return <span className={`text-xs ${info.cls}`}>{info.label}</span>;
+                        })()}
                       </td>
                     </tr>
                   );

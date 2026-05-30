@@ -6,7 +6,7 @@ GitHub Actions daily-batch.yml → ranking-snapshot job에서 실행.
 
 import logging
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 
@@ -18,6 +18,7 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 TOP_N = 100
+STALE_DAYS = 7  # 이 일수 이상 된 분석 결과는 랭킹에서 제외
 
 
 def _get_client():
@@ -33,11 +34,12 @@ def run(snapshot_date: date | None = None) -> None:
 
     client = _get_client()
 
-    # 1. 종목별 최신 분석 결과 (ticker당 가장 최근 1개)
-    # limit=5000으로 Supabase 기본 1000행 제한 우회
+    # 1. 종목별 최신 분석 결과 — STALE_DAYS 이내만 사용
+    staleness_cutoff = (datetime.now(timezone.utc) - timedelta(days=STALE_DAYS)).isoformat()
     res = (
         client.table("analysis_results")
         .select("ticker, total_score, analyzed_at")
+        .gte("analyzed_at", staleness_cutoff)
         .order("analyzed_at", desc=True)
         .limit(5000)
         .execute()
@@ -48,10 +50,14 @@ def run(snapshot_date: date | None = None) -> None:
 
     # ticker별 최신 점수만 유지
     seen: dict[str, float] = {}
+    seen_at: dict[str, str] = {}
     for row in res.data:
         t = row["ticker"]
         if t not in seen:
             seen[t] = float(row["total_score"])
+            seen_at[t] = row["analyzed_at"]
+
+    log.info("ranking_snapshot: 유효 종목 %d개 (분석 %d일 이내)", len(seen), STALE_DAYS)
 
     # 상위 TOP_N 정렬
     ranked = sorted(seen.items(), key=lambda x: x[1], reverse=True)[:TOP_N]
@@ -78,6 +84,7 @@ def run(snapshot_date: date | None = None) -> None:
                 "ticker": ticker,
                 "score": score,
                 "rank_change": rank_change,
+                "analyzed_at": seen_at.get(ticker),
             }
         )
 

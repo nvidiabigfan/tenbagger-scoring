@@ -11,6 +11,7 @@ YouTube API 10,000 unit/일 한도 → 종목당 ~101 unit → YouTubeAnalyzer �
 import logging
 import os
 import time
+from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 
@@ -34,23 +35,71 @@ log = logging.getLogger(__name__)
 
 MAX_BATCH = int(os.getenv("BULK_BATCH_MAX", "95"))
 FORCE_REANALYSIS = os.getenv("FORCE_REANALYSIS", "0") == "1"
+STALE_DAYS = int(os.getenv("STALE_DAYS", "3"))  # N일 이상 분석 안 된 종목을 stale로 간주
 _INTER_STOCK_SLEEP = 2.0  # 종목 간 대기 (Finviz rate limit 방지)
 
 
 def _get_candidate_tickers() -> list[str]:
-    """stocks 마스터 전체를 market_cap DESC로 반환. NULL은 마지막."""
-    client = create_client(
+    """stale 종목 우선 + market_cap DESC로 후보 반환.
+
+    정렬 우선순위:
+    1. 한 번도 분석 안 된 종목 (never analyzed)
+    2. STALE_DAYS 이상 분석 안 된 종목 (stale), analyzed_at ASC
+    3. 최근 분석된 종목, market_cap DESC
+    """
+    sb = create_client(
         os.environ["SUPABASE_URL"],
         os.environ["SUPABASE_SERVICE_KEY"],
     )
-    res = (
-        client.table("stocks")
+
+    # 전체 active 종목
+    stocks_res = (
+        sb.table("stocks")
         .select("ticker, market_cap")
         .eq("is_active", True)
         .order("market_cap", desc=True, nullsfirst=False)
         .execute()
     )
-    return [r["ticker"] for r in (res.data or [])]
+    all_stocks: list[dict] = stocks_res.data or []
+    market_cap_map = {r["ticker"]: r.get("market_cap") for r in all_stocks}
+    all_tickers_ordered = [r["ticker"] for r in all_stocks]  # market_cap DESC
+
+    # 최신 분석일 조회 (ticker당 1건)
+    stale_cutoff = (datetime.now(timezone.utc) - timedelta(days=STALE_DAYS)).isoformat()
+    analysis_res = (
+        sb.table("analysis_results")
+        .select("ticker, analyzed_at")
+        .order("analyzed_at", desc=True)
+        .limit(5000)
+        .execute()
+    )
+    latest_at: dict[str, str] = {}
+    for row in (analysis_res.data or []):
+        t = row["ticker"]
+        if t not in latest_at:
+            latest_at[t] = row["analyzed_at"]
+
+    # 분류
+    never: list[str] = []
+    stale: list[str] = []
+    fresh: list[str] = []
+    for ticker in all_tickers_ordered:
+        at = latest_at.get(ticker)
+        if at is None:
+            never.append(ticker)
+        elif at < stale_cutoff:
+            stale.append(ticker)
+        else:
+            fresh.append(ticker)
+
+    # stale은 analyzed_at ASC (가장 오래된 것부터)
+    stale.sort(key=lambda t: latest_at.get(t, ""))
+
+    log.info(
+        "후보: never=%d stale(>%dd)=%d fresh=%d",
+        len(never), STALE_DAYS, len(stale), len(fresh),
+    )
+    return never + stale + fresh
 
 
 def run() -> None:
