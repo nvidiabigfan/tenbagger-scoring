@@ -3,33 +3,101 @@
 단일 종목 기본 지표를 Finviz quote 페이지에서 파싱.
 반환값 예시: {"Recom": "1.27", "Target Price": "304.50", "Inst Own": "69.21%", "Index": "DJIA, NDX, S&P 500", ...}
 get_ratings_history(): 차트 이벤트에서 analyst ratings 변경 이력 반환.
+
+120초 HTML 캐시: 단일 분석 내 중복 호출(7개 모듈)을 1회 HTTP 요청으로 압축.
 """
 
 import json
+import os
 import re
+import threading
+import time
 from datetime import datetime, timezone
 
 import httpx
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+_CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "contact@example.com")
 UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
 )
 TIMEOUT = 10
 
+# ── HTML 캐시 (ticker → (monotonic_time, html)) ─────────────────────
+_html_cache: dict[str, tuple[float, str]] = {}
+_cache_lock = threading.Lock()
+_CACHE_TTL = 120  # 초 — 분석 1회(≈30s) 동안 7개 모듈 중복 호출 흡수
+
+
+def _cache_get(ticker: str) -> str | None:
+    with _cache_lock:
+        entry = _html_cache.get(ticker)
+    if entry and time.monotonic() - entry[0] < _CACHE_TTL:
+        return entry[1]
+    return None
+
+
+def _cache_set(ticker: str, html: str) -> None:
+    with _cache_lock:
+        _html_cache[ticker] = (time.monotonic(), html)
+
+
+# ── HTTP 헬퍼 (transient 오류 3회 retry) ────────────────────────────
+
+@retry(
+    retry=retry_if_exception_type((httpx.TimeoutException, httpx.ConnectError)),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    reraise=True,
+)
+def _fetch_html(url: str) -> str:
+    r = httpx.get(
+        url,
+        headers={"User-Agent": UA, "Accept": "text/html"},
+        timeout=TIMEOUT,
+        follow_redirects=True,
+    )
+    r.raise_for_status()
+    return r.text
+
+
+def _get_quote_html(ticker: str) -> str:
+    """ticker의 Finviz quote 페이지 HTML 반환. 120초 캐시 적용."""
+    cached = _cache_get(ticker)
+    if cached is not None:
+        return cached
+    url = f"https://finviz.com/quote.ashx?t={ticker}&p=d"
+    html = _fetch_html(url)
+    _cache_set(ticker, html)
+    return html
+
+
+# ── 공개 API ────────────────────────────────────────────────────────
 
 def get_metrics(ticker: str) -> dict[str, str]:
     """Finviz 스냅샷 테이블에서 key-value 지표 전부 반환."""
-    url = f"https://finviz.com/quote.ashx?t={ticker}&p=d"
-    r = httpx.get(url, headers={"User-Agent": UA, "Accept": "text/html"}, timeout=TIMEOUT, follow_redirects=True)
-    r.raise_for_status()
-    return _parse_snapshot(r.text)
+    return _parse_snapshot(_get_quote_html(ticker))
 
+
+def get_stock_info(ticker: str) -> dict[str, str]:
+    """종목 기본 정보 반환: company_name, sector, industry, exchange."""
+    return _parse_stock_info(_get_quote_html(ticker))
+
+
+def get_ratings_history(ticker: str) -> list[dict]:
+    """차트 이벤트에서 analyst ratings 변경 이력 반환.
+
+    반환 형식: [{"date": datetime, "action": str, "analyst": str, "target": float|None}]
+    """
+    return _parse_ratings_history(_get_quote_html(ticker))
+
+
+# ── 파서 ─────────────────────────────────────────────────────────────
 
 def _parse_snapshot(html: str) -> dict[str, str]:
     result: dict[str, str] = {}
 
-    # 패턴 1: 레이블이 <a> 링크인 경우 → 값이 <span> 안에
     linked = re.findall(
         r'snapshot-td-label[^>]*>.*?<a[^>]*>([^<]+)</a>.*?snapshot-td-content[^>]*>(?:<[^>]+>)*([^<\s][^<]*)',
         html, re.DOTALL,
@@ -37,14 +105,12 @@ def _parse_snapshot(html: str) -> dict[str, str]:
     for k, v in linked:
         result[k.strip()] = v.strip()
 
-    # 패턴 2: 레이블이 일반 텍스트인 경우 → 값이 <b> 안에 (Inst Own, Index, Inst Trans 등)
     plain = re.findall(
         r'snapshot-td-label">([^<]{2,40})</div></td><td[^>]*>.*?<b>(.*?)</b>',
         html, re.DOTALL,
     )
     for k, v in plain:
         key = k.strip()
-        # <small> 등 내부 태그 제거
         val = re.sub(r"<[^>]+>", "", v).strip()
         if key and val:
             result[key] = val
@@ -52,16 +118,7 @@ def _parse_snapshot(html: str) -> dict[str, str]:
     return result
 
 
-def get_stock_info(ticker: str) -> dict[str, str]:
-    """종목 기본 정보 반환: company_name, sector, industry, exchange."""
-    url = f"https://finviz.com/quote.ashx?t={ticker}&p=d"
-    r = httpx.get(url, headers={"User-Agent": UA, "Accept": "text/html"}, timeout=TIMEOUT, follow_redirects=True)
-    r.raise_for_status()
-    return _parse_stock_info(r.text)
-
-
 def _parse_stock_info(html: str) -> dict[str, str]:
-    # tab-link 순서: company / sector / industry / country / size / exchange / ...
     tabs = re.findall(r"tab-link[^>]*>([^<]+)</a>", html)
     tabs = [re.sub(r"&amp;", "&", t.strip()) for t in tabs if t.strip()]
 
@@ -75,18 +132,6 @@ def _parse_stock_info(html: str) -> dict[str, str]:
     if len(tabs) >= 6:
         result["exchange"] = tabs[5]
     return result
-
-
-def get_ratings_history(ticker: str) -> list[dict]:
-    """Finviz 차트 이벤트에서 analyst ratings 변경 이력 반환.
-
-    반환 형식: [{"date": datetime, "action": "Upgrade"|"Downgrade"|"Reiterate"|"Init", "analyst": str, "target": float|None}]
-    최근 1~2년치 주요 변경 포함. 데이터 없으면 빈 리스트.
-    """
-    url = f"https://finviz.com/quote.ashx?t={ticker}&p=d"
-    r = httpx.get(url, headers={"User-Agent": UA, "Accept": "text/html"}, timeout=TIMEOUT, follow_redirects=True)
-    r.raise_for_status()
-    return _parse_ratings_history(r.text)
 
 
 def _parse_ratings_history(html: str) -> list[dict]:
@@ -131,6 +176,8 @@ def _normalize_action(raw: str) -> str:
         return "reiterate"
     return "other"
 
+
+# ── 유틸 파서 ────────────────────────────────────────────────────────
 
 def parse_float(value: str | None) -> float | None:
     if not value or value in ("-", "N/A", ""):

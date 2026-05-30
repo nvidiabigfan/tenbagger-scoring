@@ -126,10 +126,15 @@ def _build_report(result: EngineResult) -> str:
     ]
 
     for name, r in result.module_results.items():
+        ev_lines = "  \n".join(
+            f"  {k}: {v}"
+            for k, v in r.evidence.items()
+            if v is not None and k not in ("error", "note", "keyword")
+        )
         lines += [
             f"### {name.upper()}",
             f"- 점수: {r.score}/100 · 신뢰도: {r.confidence:.0%}",
-            f"- 근거: `{r.evidence}`",
+            f"- 근거:\n{ev_lines}" if ev_lines else "- 근거: 없음",
             "",
         ]
 

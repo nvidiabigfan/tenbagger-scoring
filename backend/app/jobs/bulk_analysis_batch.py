@@ -17,8 +17,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from supabase import create_client
-
 from app.analyzers.analyst import AnalystAnalyzer
 from app.analyzers.buzz import BuzzAnalyzer
 from app.analyzers.etf import EtfAnalyzer
@@ -27,6 +25,7 @@ from app.analyzers.momentum import MomentumAnalyzer
 from app.analyzers.revenue import RevenueAccelerationAnalyzer
 from app.analyzers.size import SizeAnalyzer
 from app.db import client as db
+from app.db.client import _get_client
 from app.jobs import ranking_snapshot
 from app.scoring.engine import ScoringEngine
 
@@ -47,10 +46,7 @@ def _get_candidate_tickers() -> list[str]:
     2. STALE_DAYS 이상 분석 안 된 종목 (stale), analyzed_at ASC
     3. 최근 분석된 종목, market_cap DESC
     """
-    sb = create_client(
-        os.environ["SUPABASE_URL"],
-        os.environ["SUPABASE_SERVICE_KEY"],
-    )
+    sb = _get_client()
 
     # 전체 active 종목
     stocks_res = (

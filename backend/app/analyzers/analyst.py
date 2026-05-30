@@ -10,7 +10,6 @@
 """
 
 import logging
-import os
 from datetime import date, datetime, timedelta, timezone
 
 from app.analyzers.base import Analyzer, AnalyzerResult
@@ -77,12 +76,8 @@ def _coverage_bonus(ticker: str, current_count: int) -> tuple[float, dict]:
     DB 미연결/스냅샷 없으면 보너스 0 + 오늘자 스냅샷 저장 시도.
     """
     try:
-        from supabase import create_client
-
-        client = create_client(
-            os.environ["SUPABASE_URL"],
-            os.environ["SUPABASE_SERVICE_KEY"],
-        )
+        from app.db.client import _get_client
+        client = _get_client()
 
         today = date.today().isoformat()
         past_date = (date.today() - timedelta(days=90)).isoformat()

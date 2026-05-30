@@ -42,6 +42,7 @@ class ModuleResult(BaseModel):
     signal: str
     confidence: float
     evidence: dict
+    weight: int | None = None
 
 
 class AnalyzeResponse(BaseModel):
@@ -68,12 +69,14 @@ def analyze(ticker: str):
     # 24시간 캐시
     cached = db.get_recent_analysis(ticker)
     if cached:
+        weights = _get_engine().module_weights()
         modules = {
             m["module_name"]: ModuleResult(
                 score=float(m["score"]),
                 signal=m["signal"],
                 confidence=float(m["confidence"]),
                 evidence=m["evidence"] or {},
+                weight=weights.get(m["module_name"]),
             )
             for m in cached.get("module_scores", [])
         }
@@ -115,6 +118,7 @@ def analyze(ticker: str):
                 signal=r.signal,
                 confidence=r.confidence,
                 evidence=r.evidence,
+                weight=result.module_weights.get(name),
             )
             for name, r in result.module_results.items()
         },

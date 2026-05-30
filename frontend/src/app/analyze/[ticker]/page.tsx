@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
@@ -120,6 +120,7 @@ interface ModuleResult {
   signal: string;
   confidence: number;
   evidence: Record<string, unknown>;
+  weight?: number;
 }
 
 interface AnalyzeResult {
@@ -173,35 +174,89 @@ function scoreColor(s: number) {
 }
 
 const KEY_LABEL: Record<string, string> = {
-  net_ratio_1m:          "애널 1개월",
-  net_ratio_3m:          "애널 3개월",
-  net_ratio_6m:          "애널 6개월",
-  net_ratio_1y:          "애널 1년",
-  composite_net:         "애널 종합",
-  upside_pct:            "목표가 괴리",
-  inst_trans_pct:        "기관 순매수",
-  rel_volume:            "상대 거래량",
-  rate_3m:               "Trends 3개월",
-  rate_6m:               "Trends 6개월",
-  rate_1y:               "Trends 1년",
-  composite_rate:        "Trends 종합",
-  coverage_count_now:    "커버리지 수",
-  coverage_growth_3m:    "커버리지 증가(3m)",
-  mom_ratio:             "버즈 MoM",
-  consecutive_growth_3m: "3개월 연속상승",
-  transition_bonus:      "매출전환 보너스",
-  persistence_ratio:     "Trends 지속성",
-  eps_flip_bonus:        "EPS전환 보너스",
-  analyst_density_bonus: "애널 밀도",
-  news_count_30d:        "뉴스 수(30일)",
-  perf_1w:               "수익률 1주",
-  perf_1m:               "수익률 1개월",
-  perf_3m:               "수익률 3개월",
-  perf_composite:        "모멘텀 종합",
-  rsi:                   "RSI(14)",
-  range_52w:             "52주 위치",
-  insider_trans_pct:     "내부자 순매수",
-  insider_own_pct:       "내부자 보유",
+  // ── Analyst ──────────────────────────────────────
+  net_ratio_1m:           "애널 1개월 (Net Ratio 1M)",
+  net_ratio_3m:           "애널 3개월 (Net Ratio 3M)",
+  net_ratio_6m:           "애널 6개월 (Net Ratio 6M)",
+  net_ratio_1y:           "애널 1년 (Net Ratio 1Y)",
+  composite_net:          "애널 종합 (Composite Net)",
+  upside_pct:             "목표가 괴리 (Upside %)",
+  ratings_count:          "레이팅 수 (Ratings Count)",
+  ratings_count_1y:       "1년 레이팅 수 (Ratings Count 1Y)",
+  target_price:           "목표가 (Target Price)",
+  current_price:          "현재가 (Current Price)",
+  mode:                   "분석 모드 (Mode)",
+  recom:                  "추천 지수 (Recom)",
+  recom_fallback:         "추천 폴백 여부 (Recom Fallback)",
+  coverage_count_now:     "커버리지 수 (Coverage Count)",
+  coverage_growth_3m:     "커버리지 증가 3개월 (Coverage Growth 3M)",
+  coverage_count_90d_ago: "90일 전 커버리지 (Coverage 90D Ago)",
+  coverage_snapshot_date: "스냅샷 날짜 (Snapshot Date)",
+  analyst_density_bonus:  "애널 밀도 보너스 (Analyst Density Bonus)",
+  mc_billions:            "시총 십억$ (Mc Billions)",
+
+  // ── ETF ──────────────────────────────────────────
+  inst_trans_pct:         "기관 순매수 (Inst Trans %)",
+  inst_trans_score:       "기관 순매수 점수 (Inst Trans Score)",
+  inst_own_pct:           "기관 보유율 (Inst Own %)",
+  rel_volume:             "상대 거래량 (Rel Volume)",
+  rel_volume_score:       "상대 거래량 점수 (Rel Volume Score)",
+  volume_score:           "거래량 점수 (Volume Score)",
+
+  // ── Revenue ──────────────────────────────────────
+  sales_qoq_pct:          "매출 전분기 대비 (Sales QoQ%)",
+  sales_5y_avg_pct:       "매출 5년 평균 성장률 (Sales 5Y Avg%)",
+  sales_3y_avg_pct:       "매출 3년 평균 성장률 (Sales 3Y Avg%)",
+  accel_delta_pct:        "매출 가속도 변화 (Accel Delta%)",
+  eps_qoq_pct:            "EPS 전분기 대비 (EPS QoQ%)",
+  eps_5y_avg_pct:         "EPS 5년 평균 성장률 (EPS 5Y Avg%)",
+  gross_margin_pct:       "매출총이익률 (Gross Margin%)",
+  sales_score:            "매출 점수 (Sales Score)",
+  accel_score:            "가속도 점수 (Accel Score)",
+  eps_score:              "EPS 점수 (Eps Score)",
+  transition_bonus:       "매출 음→양 전환 보너스 (Transition Bonus)",
+  eps_flip_bonus:         "EPS 음→양 전환 보너스 (EPS Flip Bonus)",
+
+  // ── Momentum ─────────────────────────────────────
+  perf_1w:                "수익률 1주 (Perf 1W)",
+  perf_1m:                "수익률 1개월 (Perf 1M)",
+  perf_3m:                "수익률 3개월 (Perf 3M)",
+  perf_composite:         "모멘텀 종합 (Perf Composite)",
+  rsi:                    "RSI (14일)",
+  range_52w:              "52주 범위 위치 (Range 52W)",
+
+  // ── Buzz ─────────────────────────────────────────
+  recent_30d_avg:         "최근 30일 평균 조회수 (Recent 30D Avg)",
+  prev_30d_avg:           "직전 30일 평균 조회수 (Prev 30D Avg)",
+  m3_30d_avg:             "3개월 전 30일 평균 조회수 (M3 30D Avg)",
+  days_collected:         "수집 일수 (Days Collected)",
+  news_count_30d:         "뉴스 수 30일 (News Count 30D)",
+  mom_ratio:              "버즈 전월 대비 (MoM Ratio)",
+  consecutive_growth_3m:  "3개월 연속 상승 여부 (Consecutive Growth 3M)",
+  wiki_title:             "위키피디아 제목 (Wiki Title)",
+  avg_views:              "평균 조회수 (Avg Views)",
+  avg_3m:                 "3개월 평균 (Avg 3M)",
+  avg_6m_ago:             "6개월 전 평균 (Avg 6M Ago)",
+  avg_9m_ago:             "9개월 전 평균 (Avg 9M Ago)",
+  avg_12m_ago:            "12개월 전 평균 (Avg 12M Ago)",
+
+  // ── Size ─────────────────────────────────────────
+  cap_zone:               "시총 구간 (Cap Zone)",
+  market_cap_b:           "시총 십억$ (Market Cap B)",
+  market_cap_raw:         "시총 원값 (Market Cap Raw)",
+
+  // ── Insider ──────────────────────────────────────
+  insider_trans_pct:      "내부자 순매수 (Insider Trans %)",
+  insider_own_pct:        "내부자 보유율 (Insider Own %)",
+  insider_own:            "내부자 보유 (Insider Own)",
+
+  // ── Trends ───────────────────────────────────────
+  rate_3m:                "Trends 3개월 변화율 (Rate 3M)",
+  rate_6m:                "Trends 6개월 변화율 (Rate 6M)",
+  rate_1y:                "Trends 1년 변화율 (Rate 1Y)",
+  composite_rate:         "Trends 종합 변화율 (Composite Rate)",
+  persistence_ratio:      "Trends 지속성 비율 (Persistence Ratio)",
+  q4_avg:                 "최근 3개월 평균 관심도 (Q4 Avg)",
 };
 
 // evidence 값 포맷
@@ -298,10 +353,10 @@ function EvidencePanel({ evidence }: { evidence: Record<string, unknown> }) {
           {rest.length > 0 && (
             <dl className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px]">
               {rest.map(([k, v]) => (
-                <>
-                  <dt key={`k-${k}`} className="text-gray-400 truncate">{keyLabel(k)}</dt>
-                  <dd key={`v-${k}`} className="text-gray-600 tabular-nums">{v}</dd>
-                </>
+                <React.Fragment key={k}>
+                  <dt className="text-gray-400 truncate">{keyLabel(k)}</dt>
+                  <dd className="text-gray-600 tabular-nums">{v}</dd>
+                </React.Fragment>
               ))}
             </dl>
           )}
@@ -451,8 +506,8 @@ export default function AnalyzePage() {
                   {MODULE_LABEL[name] && (
                     <div className="text-[10px] text-gray-400">{MODULE_LABEL[name]}</div>
                   )}
-                  {MODULE_WEIGHT[name] !== undefined && (
-                    <div className="text-[9px] text-gray-300 mt-0.5">배점 {MODULE_WEIGHT[name]}점</div>
+                  {(m.weight ?? MODULE_WEIGHT[name]) !== undefined && (
+                    <div className="text-[9px] text-gray-300 mt-0.5">배점 {m.weight ?? MODULE_WEIGHT[name]}점</div>
                   )}
                 </div>
                 <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ml-1 ${ms.cls}`}>{ms.label}</span>

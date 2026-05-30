@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from app.analyzers.trends import TrendsAnalyzer, _score_to_signal
+from app.analyzers.disabled.trends import TrendsAnalyzer, _score_to_signal
 
 
 def _make_series(values: list[float]) -> pd.DataFrame:

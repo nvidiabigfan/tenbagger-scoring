@@ -5,27 +5,19 @@ GitHub Actions daily-batch.yml → ranking-snapshot job에서 실행.
 """
 
 import logging
-import os
 from datetime import date, datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from supabase import create_client
+from app.db.client import _get_client
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 TOP_N = 100
 STALE_DAYS = 7  # 이 일수 이상 된 분석 결과는 랭킹에서 제외
-
-
-def _get_client():
-    return create_client(
-        os.environ["SUPABASE_URL"],
-        os.environ["SUPABASE_SERVICE_KEY"],
-    )
 
 
 def run(snapshot_date: date | None = None) -> None:

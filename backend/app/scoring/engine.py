@@ -16,6 +16,7 @@ class EngineResult:
     module_results: dict[str, AnalyzerResult]
     active_modules: list[str]
     analysis_duration_ms: int
+    module_weights: dict[str, int]
 
 
 class ScoringEngine:
@@ -33,6 +34,14 @@ class ScoringEngine:
             for name, cfg in self._module_cfg.items()
             if cfg.get("enabled", False) and name in self._analyzers
         ]
+
+    def module_weights(self) -> dict[str, int]:
+        """활성화된 모든 모듈의 설정 배점 반환 (프론트 표시용)."""
+        return {
+            name: cfg.get("weight", 0)
+            for name, cfg in self._module_cfg.items()
+            if cfg.get("enabled", False)
+        }
 
     def _confident_modules(self, results: dict[str, AnalyzerResult], active: list[str]) -> list[str]:
         """min_confidence 미만 모듈 제외 — 데이터 없는 모듈이 점수를 왜곡하지 않도록."""
@@ -88,4 +97,5 @@ class ScoringEngine:
             module_results=results,
             active_modules=active,
             analysis_duration_ms=duration_ms,
+            module_weights={m: self._module_cfg[m].get("weight", 0) for m in active},
         )
