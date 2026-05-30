@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import WatchlistButton from "@/components/WatchlistButton";
 
 export const revalidate = 3600;
 
@@ -123,6 +124,9 @@ export default async function RankingPage() {
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${sig.cls}`}>
                     {sig.label}
                   </span>
+                  <div className="mt-2 flex justify-center">
+                    <WatchlistButton ticker={row.ticker} />
+                  </div>
                 </Link>
               );
             })}
@@ -141,6 +145,7 @@ export default async function RankingPage() {
                   <th className="px-4 py-3 text-left text-gray-500 font-medium hidden sm:table-cell">시그널</th>
                   <th className="px-4 py-3 text-right text-gray-500 font-medium w-14">변동</th>
                   <th className="px-4 py-3 text-right text-gray-500 font-medium w-16 hidden sm:table-cell">분석일</th>
+                  <th className="px-4 py-3 w-8"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -198,6 +203,9 @@ export default async function RankingPage() {
                           if (!info) return <span className="text-gray-300 text-xs">오늘</span>;
                           return <span className={`text-xs ${info.cls}`}>{info.label}</span>;
                         })()}
+                      </td>
+                      <td className="px-2 py-2.5 text-center">
+                        <WatchlistButton ticker={row.ticker} />
                       </td>
                     </tr>
                   );
