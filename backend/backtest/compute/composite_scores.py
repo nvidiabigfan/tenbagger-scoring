@@ -56,8 +56,9 @@ def _load_pivot(con, start: str) -> pd.DataFrame:
 def _load_forward_returns(con) -> pd.DataFrame:
     return con.execute("""
         SELECT ticker, as_of_date,
-               ret_1m AS fwd_1m, ret_3m AS fwd_3m,
-               ret_6m AS fwd_6m, ret_12m AS fwd_12m
+               ret_1m  AS fwd_1m,  ret_3m  AS fwd_3m,
+               ret_6m  AS fwd_6m,  ret_12m AS fwd_12m,
+               ret_24m AS fwd_24m, ret_36m AS fwd_36m
         FROM forward_returns
     """).df()
 
@@ -155,7 +156,10 @@ def _yearly_ic(ic_df: pd.DataFrame) -> pd.Series:
 # ── 리포트 출력 ───────────────────────────────────────────────────────────
 
 def _print_ic_table(df: pd.DataFrame, score_col: str, title: str) -> dict[str, pd.DataFrame]:
-    horizons = [("fwd_1m","1M"),("fwd_3m","3M"),("fwd_6m","6M"),("fwd_12m","12M")]
+    horizons = [
+        ("fwd_1m","1M"), ("fwd_3m","3M"), ("fwd_6m","6M"),
+        ("fwd_12m","1Y"), ("fwd_24m","2Y"), ("fwd_36m","3Y"),
+    ]
     print(f"\n{'─'*68}")
     print(f"  {title}")
     print(f"{'─'*68}")
@@ -206,6 +210,60 @@ def _print_yearly(ic_df: pd.DataFrame) -> None:
         print(f"    {yr}: {sign}{ic:.4f}  {bar}")
 
 
+def _score_bucket_report(df: pd.DataFrame, score_col: str) -> None:
+    """점수 구간별 1Y/2Y/3Y 수익률 분포 (중앙값 + 25th/75th 백분위)."""
+    buckets = [
+        (75, 101, "A  고점수  (75~100)"),
+        (60, 75,  "B  중고    (60~75) "),
+        (40, 60,  "C  중저    (40~60) "),
+        (0,  40,  "D  저점수  (0~40)  "),
+    ]
+    horizons = [
+        ("fwd_6m",  " 6M"), ("fwd_12m", " 1Y"),
+        ("fwd_24m", " 2Y"), ("fwd_36m", " 3Y"),
+    ]
+
+    valid = df[df[score_col].notna()].copy()
+    available = [h for h, _ in horizons if h in valid.columns and valid[h].notna().sum() > 0]
+    if not available:
+        return
+
+    print(f"\n  점수 구간별 수익률 (중앙값 / 상위25% 기준)")
+    print(f"  {'구간':<24}" + "".join(
+        f"{lbl:>12}" for h, lbl in horizons if h in available
+    ))
+    print("  " + "─" * (24 + 12 * len(available)))
+
+    for lo, hi, label in buckets:
+        mask = (valid[score_col] >= lo) & (valid[score_col] < hi)
+        grp = valid[mask]
+        n = len(grp)
+        row = f"  {label:<24}"
+        for h, lbl in horizons:
+            if h not in available:
+                continue
+            vals = grp[h].dropna()
+            if len(vals) < 20:
+                row += f"{'—':>12}"
+            else:
+                med = vals.median()
+                p75 = vals.quantile(0.75)
+                row += f"{med:>+7.1%}({p75:>+5.1%})"
+        row += f"  N={n:,}"
+        print(row)
+
+    print(f"  {'':24}{'중앙값(75th 백분위)'}")
+
+    # 구간별 종목 수 및 유효 기간 표시
+    print()
+    for h, lbl in horizons:
+        if h not in available:
+            continue
+        n_valid = valid[h].notna().sum()
+        n_months = valid.groupby("as_of_date")[h].first().notna().sum()
+        print(f"  {lbl.strip():>3}: {n_valid:,} (ticker×월) / {n_months}개월 유효")
+
+
 def _print_report(df: pd.DataFrame, tag: str = "Production weights") -> None:
     print(f"\n{'='*68}")
     print(f"복합 스코어 IC 백테스트  [{tag}]")
@@ -222,10 +280,14 @@ def _print_report(df: pd.DataFrame, tag: str = "Production weights") -> None:
 
     # Q2 — 변화량 IC
     if "delta" in df.columns:
-        delta_dfs = _print_ic_table(df, "delta", "Q2  점수 변화량(delta) → 향후 수익률  ← 핵심 질문")
+        delta_dfs = _print_ic_table(df, "delta", "Q2  점수 변화량(delta) → 향후 수익률")
         if "fwd_3m" in delta_dfs:
-            _print_decile(df, "delta", "fwd_3m")
             _print_yearly(delta_dfs["fwd_3m"])
+
+    # Q3 — 점수 구간별 장기 수익 분포  ← 장기 투자자 핵심 질문
+    print(f"\n{'─'*68}")
+    print(f"  Q3  점수 구간별 장기 수익 분포 (중앙값 / 상위25% 백분위)")
+    _score_bucket_report(df, "composite")
 
     print(f"{'='*68}")
 
