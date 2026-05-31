@@ -2,7 +2,7 @@ name: Daily Batch
 
 on:
   schedule:
-    - cron: '0 12 * * 1-5'  # UTC 12:00 = KST 21:00, weekdays
+    - cron: '0 18 * * 1-5'  # UTC 18:00 = KST 03:00 (다음날 새벽), weekdays
   workflow_dispatch:
     inputs:
       force_reanalysis:
@@ -10,9 +10,9 @@ on:
         required: false
         default: '0'
       bulk_batch_max:
-        description: 'Max stocks to analyze (default 95)'
+        description: 'Max stocks to analyze (default 500 = all)'
         required: false
-        default: '95'
+        default: '500'
 jobs:
   watchlist-reanalysis:
     name: Watchlist Re-analysis
@@ -44,7 +44,7 @@ jobs:
     name: Bulk Analysis + Ranking Snapshot
     runs-on: ubuntu-latest
     needs: watchlist-reanalysis
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -65,6 +65,6 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          BULK_BATCH_MAX: ${{ github.event.inputs.bulk_batch_max || '95' }}
+          BULK_BATCH_MAX: ${{ github.event.inputs.bulk_batch_max || '500' }}
           FORCE_REANALYSIS: ${{ github.event.inputs.force_reanalysis || '0' }}
         run: python -m app.jobs.bulk_analysis_batch

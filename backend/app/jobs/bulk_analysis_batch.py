@@ -32,10 +32,10 @@ from app.scoring.engine import ScoringEngine
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-MAX_BATCH = int(os.getenv("BULK_BATCH_MAX", "95"))
+MAX_BATCH = int(os.getenv("BULK_BATCH_MAX", "500"))
 FORCE_REANALYSIS = os.getenv("FORCE_REANALYSIS", "0") == "1"
 STALE_DAYS = int(os.getenv("STALE_DAYS", "3"))  # N일 이상 분석 안 된 종목을 stale로 간주
-_INTER_STOCK_SLEEP = 2.0  # 종목 간 대기 (Finviz rate limit 방지)
+_INTER_STOCK_SLEEP = 5.0  # 종목 간 대기 (Finviz rate limit 방지, 새벽 배치 기준)
 
 
 def _get_candidate_tickers() -> list[str]:
