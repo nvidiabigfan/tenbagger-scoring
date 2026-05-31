@@ -1,14 +1,17 @@
-"""수급 데이터 조회 + 온디맨드 수집 엔드포인트."""
+"""수급 데이터 조회 + 온디맨드 수집 엔드포인트.
+14번 백엔드(localhost:8000)를 내부 프록시로 사용.
+"""
 
+import os
 import re
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
-
-from app.db.client import _get_client
-from app.jobs.supply_collect_batch import collect_supply
+import httpx
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 router = APIRouter(prefix="/supply", tags=["supply"])
 
+_SUPPLY_BACKEND = os.getenv("SUPPLY_BACKEND_URL", "http://localhost:8000")
 _TICKER_RE = re.compile(r"^[A-Z]{1,5}$")
 
 
@@ -20,46 +23,32 @@ def _validate(ticker: str) -> str:
 
 
 @router.get("/{ticker}")
-def get_supply(ticker: str):
+async def get_supply(ticker: str):
     t = _validate(ticker)
-    res = (
-        _get_client()
-        .table("supply_snapshots")
-        .select("*")
-        .eq("ticker", t)
-        .order("snapshot_date", desc=True)
-        .limit(1)
-        .execute()
-    )
-    if not res.data:
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(f"{_SUPPLY_BACKEND}/supply/{t}")
+    if r.status_code == 404:
         raise HTTPException(status_code=404, detail="no supply data")
-    return res.data[0]
+    if not r.is_success:
+        raise HTTPException(status_code=r.status_code, detail="supply backend error")
+    return r.json()
 
 
 @router.get("/{ticker}/history")
-def get_supply_history(ticker: str, limit: int = 60):
+async def get_supply_history(ticker: str, limit: int = 60):
     t = _validate(ticker)
-    res = (
-        _get_client()
-        .table("supply_snapshots")
-        .select("snapshot_date,close_price,short_interest_pct,pc_ratio,volume_vs_avg")
-        .eq("ticker", t)
-        .order("snapshot_date", desc=True)
-        .limit(min(limit, 120))
-        .execute()
-    )
-    return res.data
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(f"{_SUPPLY_BACKEND}/supply/{t}/history", params={"limit": min(limit, 120)})
+    if not r.is_success:
+        return []
+    return r.json()
 
 
 @router.post("/{ticker}/collect")
-def collect_on_demand(ticker: str, background_tasks: BackgroundTasks):
+async def collect_on_demand(ticker: str):
     t = _validate(ticker)
-
-    def _run():
-        data = collect_supply(t)
-        _get_client().table("supply_snapshots").upsert(
-            data, on_conflict="ticker,snapshot_date"
-        ).execute()
-
-    background_tasks.add_task(_run)
-    return {"status": "collecting", "ticker": t}
+    async with httpx.AsyncClient(timeout=60) as client:
+        r = await client.post(f"{_SUPPLY_BACKEND}/supply/{t}/collect")
+    if not r.is_success:
+        raise HTTPException(status_code=r.status_code, detail="collect failed")
+    return r.json()

@@ -52,12 +52,12 @@ class RevenueAccelerationAnalyzer(Analyzer):
         baseline_sales = sales_5y if sales_5y is not None else sales_3y
         baseline_eps   = eps_5y   if eps_5y   is not None else eps_3y
 
-        # 데이터 없으면 confidence 0
+        # 데이터 없으면 중립 처리 — 0점 패널티 없이 분모에 포함
         if sales_qoq is None:
             return AnalyzerResult(
-                score=0.0, signal="hold",
-                evidence={"note": "Sales Q/Q 없음"},
-                confidence=0.0, timestamp=self.now_utc(),
+                score=12.5, signal="hold",
+                evidence={"note": "Sales Q/Q 없음 (중립 처리)"},
+                confidence=0.5, timestamp=self.now_utc(),
             )
 
         # ── 점수 계산 ─────────────────────────────────────────
