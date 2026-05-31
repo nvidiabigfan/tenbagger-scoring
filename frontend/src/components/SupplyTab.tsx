@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const SUPPLY_API = process.env.NEXT_PUBLIC_SUPPLY_API_URL ?? "http://168.107.52.56:8000";
+const SUPPLY_API = "/api/supply";
 
 interface SupplySnapshot {
   ticker: string;
@@ -103,8 +103,8 @@ export default function SupplyTab({ ticker }: { ticker: string }) {
     setError(null);
     try {
       const [snapRes, histRes] = await Promise.all([
-        fetch(`${SUPPLY_API}/supply/${ticker}`),
-        fetch(`${SUPPLY_API}/supply/${ticker}/history?limit=60`),
+        fetch(`${SUPPLY_API}/${ticker}`),
+        fetch(`${SUPPLY_API}/${ticker}/history?limit=60`),
       ]);
 
       if (snapRes.status === 404) {
@@ -129,7 +129,7 @@ export default function SupplyTab({ ticker }: { ticker: string }) {
   const collect = async () => {
     setCollecting(true);
     try {
-      await fetch(`${SUPPLY_API}/supply/${ticker}/collect`, { method: "POST" });
+      await fetch(`${SUPPLY_API}/${ticker}/collect`, { method: "POST" });
       await load();
     } catch {
       setError("수집 실패");
