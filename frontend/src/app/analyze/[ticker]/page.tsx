@@ -4,6 +4,19 @@ import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
+import dynamic from "next/dynamic";
+
+const SupplyTab = dynamic(() => import("@/components/SupplyTab"), { ssr: false });
+const SecReportTab = dynamic(() => import("@/components/SecReportTab"), { ssr: false });
+const ChatTab = dynamic(() => import("@/components/ChatTab"), { ssr: false });
+
+type TabKey = "score" | "supply" | "sec" | "chat";
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "score", label: "성장점수" },
+  { key: "supply", label: "수급" },
+  { key: "sec", label: "SEC 리포트" },
+  { key: "chat", label: "AI Q&A" },
+];
 
 interface GrowthContext {
   available: boolean;
@@ -376,6 +389,7 @@ export default function AnalyzePage() {
   const [inWatchlist, setInWatchlist] = useState(false);
   const [wlLoading, setWlLoading] = useState(false);
   const [growthCtx, setGrowthCtx] = useState<GrowthContext | null>(null);
+  const [activeTab, setActiveTab] = useState<TabKey>("score");
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -491,57 +505,81 @@ export default function AnalyzePage() {
         </div>
       </div>
 
-      {/* Growth Context Card */}
-      {growthCtx && <GrowthContextCard ctx={growthCtx} />}
+      {/* 탭 네비게이션 */}
+      <div className="flex border-b border-gray-100 mb-3">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setActiveTab(t.key)}
+            className={`px-3 py-2 text-xs font-medium transition-colors border-b-2 -mb-px ${
+              activeTab === t.key
+                ? "border-blue-500 text-blue-600"
+                : "border-transparent text-gray-400 hover:text-gray-600"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-      {/* Module Cards */}
-      <div className="grid grid-cols-2 gap-2 mb-3">
-        {Object.entries(result.modules).map(([name, m]) => {
-          const ms = SIGNAL[m.signal] ?? { label: m.signal, cls: "bg-gray-100 text-gray-700" };
-          return (
-            <div key={name} className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
-              <div className="flex justify-between items-start mb-1.5">
-                <div>
-                  <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">{name}</span>
-                  {MODULE_LABEL[name] && (
-                    <div className="text-[10px] text-gray-400">{MODULE_LABEL[name]}</div>
-                  )}
-                  {(m.weight ?? MODULE_WEIGHT[name]) !== undefined && (
-                    <div className="text-[9px] text-gray-300 mt-0.5">배점 {m.weight ?? MODULE_WEIGHT[name]}점</div>
+      {/* 탭 콘텐츠 */}
+      {activeTab === "score" && (
+        <>
+          {/* Growth Context Card */}
+          {growthCtx && <GrowthContextCard ctx={growthCtx} />}
+
+          {/* Module Cards */}
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            {Object.entries(result.modules).map(([name, m]) => {
+              const ms = SIGNAL[m.signal] ?? { label: m.signal, cls: "bg-gray-100 text-gray-700" };
+              return (
+                <div key={name} className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
+                  <div className="flex justify-between items-start mb-1.5">
+                    <div>
+                      <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">{name}</span>
+                      {MODULE_LABEL[name] && (
+                        <div className="text-[10px] text-gray-400">{MODULE_LABEL[name]}</div>
+                      )}
+                      {(m.weight ?? MODULE_WEIGHT[name]) !== undefined && (
+                        <div className="text-[9px] text-gray-300 mt-0.5">배점 {m.weight ?? MODULE_WEIGHT[name]}점</div>
+                      )}
+                    </div>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ml-1 ${ms.cls}`}>{ms.label}</span>
+                  </div>
+                  <div className={`text-3xl font-bold ${scoreColor(m.score)}`}>{m.score}</div>
+
+                  <div className="mt-1.5 h-1 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        m.score >= 80 ? "bg-green-400" : m.score >= 60 ? "bg-blue-400" : m.score >= 40 ? "bg-yellow-400" : "bg-red-400"
+                      }`}
+                      style={{ width: `${m.score}%` }}
+                    />
+                  </div>
+
+                  <div className="text-[10px] text-gray-400 mt-1">신뢰도 {(m.confidence * 100).toFixed(0)}%</div>
+
+                  {m.evidence && Object.keys(m.evidence).length > 0 && (
+                    <EvidencePanel evidence={m.evidence} />
                   )}
                 </div>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ml-1 ${ms.cls}`}>{ms.label}</span>
-              </div>
-              <div className={`text-3xl font-bold ${scoreColor(m.score)}`}>{m.score}</div>
+              );
+            })}
+          </div>
 
-              {/* 점수 바 */}
-              <div className="mt-1.5 h-1 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all ${
-                    m.score >= 80 ? "bg-green-400" : m.score >= 60 ? "bg-blue-400" : m.score >= 40 ? "bg-yellow-400" : "bg-red-400"
-                  }`}
-                  style={{ width: `${m.score}%` }}
-                />
-              </div>
+          {/* Report */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+            <h2 className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wide">분석 리포트</h2>
+            <pre className="text-xs text-gray-600 whitespace-pre-wrap font-mono leading-relaxed">
+              {result.report_md}
+            </pre>
+          </div>
+        </>
+      )}
 
-              <div className="text-[10px] text-gray-400 mt-1">신뢰도 {(m.confidence * 100).toFixed(0)}%</div>
-
-              {/* Evidence 패널 */}
-              {m.evidence && Object.keys(m.evidence).length > 0 && (
-                <EvidencePanel evidence={m.evidence} />
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Report */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-        <h2 className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wide">분석 리포트</h2>
-        <pre className="text-xs text-gray-600 whitespace-pre-wrap font-mono leading-relaxed">
-          {result.report_md}
-        </pre>
-      </div>
+      {activeTab === "supply" && <SupplyTab ticker={result.ticker} />}
+      {activeTab === "sec" && <SecReportTab ticker={result.ticker} />}
+      {activeTab === "chat" && <ChatTab ticker={result.ticker} />}
 
       <p className="text-center text-xs text-gray-300 mt-4 mb-2">
         본 서비스는 투자 자문이 아니며 참고용입니다.
