@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND =
-  process.env.SUPPLY_API_URL ??
-  process.env.NEXT_PUBLIC_SUPPLY_API_URL ??
-  "http://168.107.52.56:8010";
+const BACKEND = process.env.SUPPLY_API_URL ?? "http://168.107.52.56:8010";
 
 async function proxy(req: NextRequest, segments: string[]) {
   const path = segments.join("/");
