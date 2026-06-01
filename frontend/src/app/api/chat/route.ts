@@ -36,16 +36,16 @@ async function buildContext(question: string): Promise<string> {
   }
 
   for (const ticker of tickers) {
-    const [{ data: snaps }, { data: consensus }, { data: sec }] = await Promise.all([
+    const [{ data: snaps }, { data: analysis }, { data: sec }] = await Promise.all([
       sb.from("supply_snapshots")
         .select("snapshot_date, close_price, short_interest_pct, pc_ratio, volume_vs_avg, institutional_net, insider_net")
         .eq("ticker", ticker)
         .order("snapshot_date", { ascending: false })
         .limit(5),
-      sb.from("analyst_consensus")
-        .select("as_of_date, target_price_avg, target_price_high, target_price_low, buy_count, hold_count, sell_count")
+      sb.from("analysis_results")
+        .select("total_score, signal, confidence, module_scores, evidence, analyzed_at")
         .eq("ticker", ticker)
-        .order("as_of_date", { ascending: false })
+        .order("analyzed_at", { ascending: false })
         .limit(1),
       sb.from("sec_filings")
         .select("form_type, filed_date, ai_summary, risk_flags")
@@ -64,12 +64,37 @@ async function buildContext(question: string): Promise<string> {
       );
     }
 
-    if (consensus?.[0]) {
-      const c = consensus[0];
-      const total = (c.buy_count ?? 0) + (c.hold_count ?? 0) + (c.sell_count ?? 0);
-      parts.push(`\n=== ${ticker} 애널리스트 컨센서스 (${c.as_of_date}) ===`);
-      parts.push(`목표가: 평균 $${c.target_price_avg?.toFixed(0) ?? "N/A"}, 고 $${c.target_price_high?.toFixed(0) ?? "N/A"}, 저 $${c.target_price_low?.toFixed(0) ?? "N/A"}`);
-      if (total > 0) parts.push(`Buy ${c.buy_count}명 / Hold ${c.hold_count}명 / Sell ${c.sell_count}명`);
+    if (analysis?.[0]) {
+      const a = analysis[0];
+      parts.push(`\n=== ${ticker} 성장 스코어링 (${a.analyzed_at?.slice(0, 10)}) ===`);
+      parts.push(`총점: ${a.total_score?.toFixed(1)}점 / 신호: ${a.signal} / 신뢰도: ${((a.confidence ?? 0) * 100).toFixed(0)}%`);
+
+      const ms = a.module_scores as Record<string, { score: number; signal: string }> | null;
+      if (ms) {
+        const moduleNames: Record<string, string> = {
+          revenue: "매출성장", etf: "ETF흐름", analyst: "애널리스트",
+          size: "시가총액", momentum: "모멘텀", buzz: "버즈", insider: "내부자거래",
+        };
+        const moduleLines = Object.entries(ms)
+          .map(([k, v]) => `${moduleNames[k] ?? k}: ${v.score?.toFixed(1)}점`)
+          .join(", ");
+        parts.push(`모듈별 점수: ${moduleLines}`);
+      }
+
+      const ev = a.evidence as Record<string, Record<string, unknown>> | null;
+      if (ev?.revenue) {
+        const r = ev.revenue;
+        const lines: string[] = [];
+        if (r.sales_qoq_pct != null) lines.push(`매출QoQ: ${Number(r.sales_qoq_pct).toFixed(1)}%`);
+        if (r.eps_qoq_pct != null) lines.push(`EPSQoQ: ${Number(r.eps_qoq_pct).toFixed(1)}%`);
+        if (r.gross_margin_pct != null) lines.push(`매출총이익률: ${Number(r.gross_margin_pct).toFixed(1)}%`);
+        if (r.transition_bonus) lines.push(`매출전환보너스: +${r.transition_bonus}점`);
+        if (lines.length) parts.push(`실적 데이터: ${lines.join(", ")}`);
+      }
+      if (ev?.analyst) {
+        const an = ev.analyst;
+        if (an.target_price != null) parts.push(`애널리스트 목표가: $${Number(an.target_price).toFixed(0)}, 현재가: $${Number(an.current_price ?? 0).toFixed(0)}, 상승여력: ${Number(an.upside_pct ?? 0).toFixed(1)}%`);
+      }
     }
 
     if (sec?.length) {
