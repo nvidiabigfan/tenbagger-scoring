@@ -168,7 +168,7 @@ ${dbContext}
       Authorization: `Bearer ${groqKey}`,
     },
     body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
+      model: "gemma2-9b-it",
       max_tokens: 600,
       stream: true,
       messages: [
