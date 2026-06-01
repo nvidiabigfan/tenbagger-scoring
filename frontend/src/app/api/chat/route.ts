@@ -5,9 +5,9 @@ const MAX_MSG_LEN = 1000;
 const MAX_MESSAGES = 20;
 
 function getSupplySupabase() {
-  const url = process.env.SUPPLY_SUPABASE_URL;
-  const key = process.env.SUPPLY_SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("SUPPLY_SUPABASE_* env not configured");
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_KEY;
+  if (!url || !key) throw new Error("SUPABASE_URL/SUPABASE_SERVICE_KEY env not configured");
   return createClient(url, key);
 }
 
