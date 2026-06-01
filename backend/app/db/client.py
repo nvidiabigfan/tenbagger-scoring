@@ -104,6 +104,41 @@ def save_analysis(
     return analysis_id, analyzed_at, report_md
 
 
+def get_latest_supply(ticker: str) -> dict | None:
+    """최신 수급 스냅샷 1건."""
+    res = (
+        _get_client()
+        .table("supply_snapshots")
+        .select("*")
+        .eq("ticker", ticker)
+        .order("snapshot_date", desc=True)
+        .limit(1)
+        .execute()
+    )
+    return res.data[0] if res.data else None
+
+
+def get_supply_history(ticker: str, limit: int = 60) -> list[dict]:
+    """수급 히스토리 (최신순, 최대 limit일)."""
+    res = (
+        _get_client()
+        .table("supply_snapshots")
+        .select("snapshot_date, close_price, short_interest_pct, volume_vs_avg, pc_ratio")
+        .eq("ticker", ticker)
+        .order("snapshot_date", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return res.data or []
+
+
+def save_supply_snapshot(data: dict) -> None:
+    """수급 스냅샷 upsert (ticker+snapshot_date 유니크)."""
+    _get_client().table("supply_snapshots").upsert(
+        data, on_conflict="ticker,snapshot_date"
+    ).execute()
+
+
 def _build_report(result: EngineResult) -> str:
     signal_display = {
         "strong_buy": "강한 주목 시그널",

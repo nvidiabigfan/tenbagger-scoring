@@ -189,14 +189,14 @@ export default function SupplyTab({ ticker }: { ticker: string }) {
           sub="1.0 = 중립"
         />
         <MetricCard
-          label="기관 순매수"
-          value={snap.institutional_net != null ? `$${(snap.institutional_net / 1e6).toFixed(1)}M` : "—"}
-          sub="13F (분기 지연)"
+          label="기관 거래 변화"
+          value={snap.institutional_net != null ? `${snap.institutional_net > 0 ? "+" : ""}${snap.institutional_net.toFixed(2)}%` : "—"}
+          sub="Finviz 분기"
         />
         <MetricCard
-          label="내부자 순매수"
-          value={snap.insider_net != null ? `$${(snap.insider_net / 1e6).toFixed(1)}M` : "—"}
-          sub="Form4"
+          label="내부자 거래 변화"
+          value={snap.insider_net != null ? `${snap.insider_net > 0 ? "+" : ""}${snap.insider_net.toFixed(2)}%` : "—"}
+          sub="Finviz 분기"
         />
       </div>
 
