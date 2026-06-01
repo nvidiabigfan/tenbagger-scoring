@@ -36,14 +36,14 @@ async function buildContext(question: string): Promise<string> {
   }
 
   for (const ticker of tickers) {
-    const [{ data: snaps }, { data: analysis }, { data: sec }] = await Promise.all([
+    const [{ data: snaps }, { data: arRows }, { data: sec }] = await Promise.all([
       sb.from("supply_snapshots")
         .select("snapshot_date, close_price, short_interest_pct, pc_ratio, volume_vs_avg, institutional_net, insider_net")
         .eq("ticker", ticker)
         .order("snapshot_date", { ascending: false })
         .limit(5),
       sb.from("analysis_results")
-        .select("total_score, signal, confidence, module_scores, evidence, analyzed_at")
+        .select("id, total_score, signal, confidence, analyzed_at")
         .eq("ticker", ticker)
         .order("analyzed_at", { ascending: false })
         .limit(1),
@@ -64,36 +64,36 @@ async function buildContext(question: string): Promise<string> {
       );
     }
 
-    if (analysis?.[0]) {
-      const a = analysis[0];
-      parts.push(`\n=== ${ticker} 성장 스코어링 (${a.analyzed_at?.slice(0, 10)}) ===`);
-      parts.push(`총점: ${a.total_score?.toFixed(1)}점 / 신호: ${a.signal} / 신뢰도: ${((a.confidence ?? 0) * 100).toFixed(0)}%`);
+    if (arRows?.[0]) {
+      const ar = arRows[0];
+      parts.push(`\n=== ${ticker} 성장 스코어링 (${ar.analyzed_at?.slice(0, 10)}) ===`);
+      parts.push(`총점: ${Number(ar.total_score).toFixed(1)}점 / 신호: ${ar.signal} / 신뢰도: ${(Number(ar.confidence) * 100).toFixed(0)}%`);
 
-      const ms = a.module_scores as Record<string, { score: number; signal: string }> | null;
-      if (ms) {
+      const { data: modules } = await sb.from("module_scores")
+        .select("module_name, score, evidence")
+        .eq("analysis_id", ar.id);
+
+      if (modules?.length) {
         const moduleNames: Record<string, string> = {
           revenue: "매출성장", etf: "ETF흐름", analyst: "애널리스트",
           size: "시가총액", momentum: "모멘텀", buzz: "버즈", insider: "내부자거래",
         };
-        const moduleLines = Object.entries(ms)
-          .map(([k, v]) => `${moduleNames[k] ?? k}: ${v.score?.toFixed(1)}점`)
-          .join(", ");
-        parts.push(`모듈별 점수: ${moduleLines}`);
-      }
+        parts.push(`모듈별 점수: ${modules.map((m) => `${moduleNames[m.module_name] ?? m.module_name} ${Number(m.score).toFixed(1)}점`).join(", ")}`);
 
-      const ev = a.evidence as Record<string, Record<string, unknown>> | null;
-      if (ev?.revenue) {
-        const r = ev.revenue;
-        const lines: string[] = [];
-        if (r.sales_qoq_pct != null) lines.push(`매출QoQ: ${Number(r.sales_qoq_pct).toFixed(1)}%`);
-        if (r.eps_qoq_pct != null) lines.push(`EPSQoQ: ${Number(r.eps_qoq_pct).toFixed(1)}%`);
-        if (r.gross_margin_pct != null) lines.push(`매출총이익률: ${Number(r.gross_margin_pct).toFixed(1)}%`);
-        if (r.transition_bonus) lines.push(`매출전환보너스: +${r.transition_bonus}점`);
-        if (lines.length) parts.push(`실적 데이터: ${lines.join(", ")}`);
-      }
-      if (ev?.analyst) {
-        const an = ev.analyst;
-        if (an.target_price != null) parts.push(`애널리스트 목표가: $${Number(an.target_price).toFixed(0)}, 현재가: $${Number(an.current_price ?? 0).toFixed(0)}, 상승여력: ${Number(an.upside_pct ?? 0).toFixed(1)}%`);
+        const rev = modules.find((m) => m.module_name === "revenue")?.evidence as Record<string, unknown> | null;
+        if (rev) {
+          const lines: string[] = [];
+          if (rev.sales_qoq_pct != null) lines.push(`매출QoQ ${Number(rev.sales_qoq_pct).toFixed(1)}%`);
+          if (rev.eps_qoq_pct != null) lines.push(`EPSQoQ ${Number(rev.eps_qoq_pct).toFixed(1)}%`);
+          if (rev.gross_margin_pct != null) lines.push(`매출총이익률 ${Number(rev.gross_margin_pct).toFixed(1)}%`);
+          if (rev.transition_bonus) lines.push(`매출전환보너스 +${rev.transition_bonus}점`);
+          if (lines.length) parts.push(`실적: ${lines.join(", ")}`);
+        }
+
+        const an = modules.find((m) => m.module_name === "analyst")?.evidence as Record<string, unknown> | null;
+        if (an?.upside_pct != null) {
+          parts.push(`애널리스트: 상승여력 ${Number(an.upside_pct).toFixed(1)}%, 목표가 $${Number(an.target_price ?? 0).toFixed(0)}, 현재가 $${Number(an.current_price ?? 0).toFixed(0)}`);
+        }
       }
     }
 
