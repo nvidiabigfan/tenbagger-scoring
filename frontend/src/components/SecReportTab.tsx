@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const SUPPLY_API = process.env.NEXT_PUBLIC_SUPPLY_API_URL ?? "http://168.107.52.56:8000";
+const SEC_API = "/api/sec";
 
 interface AiSummary {
   performance_summary?: string;
@@ -16,6 +16,7 @@ interface SecFiling {
   form_type: string;
   filed_date: string;
   report_period: string | null;
+  edgar_url: string | null;
   ai_summary: AiSummary | null;
   risk_flags: string[] | null;
   analyzed_at: string | null;
@@ -57,6 +58,16 @@ function FilingCard({ filing }: { filing: SecFiling }) {
           <span className="text-xs text-gray-400 ml-2">{filing.filed_date}</span>
           {filing.report_period && (
             <span className="text-xs text-gray-300 ml-1">({filing.report_period} 기준)</span>
+          )}
+          {filing.edgar_url && (
+            <a
+              href={filing.edgar_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] text-blue-400 hover:text-blue-600 ml-2"
+            >
+              EDGAR ↗
+            </a>
           )}
         </div>
         {flags.length > 0 && (
@@ -123,7 +134,7 @@ export default function SecReportTab({ ticker }: { ticker: string }) {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetch(`${SUPPLY_API}/sec/${ticker}`)
+    fetch(`${SEC_API}/${ticker}`)
       .then((r) => {
         if (!r.ok) throw new Error(`조회 실패 (${r.status})`);
         return r.json();
@@ -142,20 +153,20 @@ export default function SecReportTab({ ticker }: { ticker: string }) {
   if (error) return (
     <div className="text-center pt-8">
       <p className="text-gray-500 text-sm">{error}</p>
-      <p className="text-xs text-gray-400 mt-1">SEC 데이터는 14번 백엔드 배치가 실행된 워치리스트 종목만 지원됩니다.</p>
+      <p className="text-xs text-gray-400 mt-1">EDGAR API 조회 실패 — 잠시 후 다시 시도하세요.</p>
     </div>
   );
 
   if (filings.length === 0) return (
     <div className="text-center pt-8">
-      <p className="text-gray-400 text-sm">분석된 SEC 파일링 없음</p>
-      <p className="text-xs text-gray-300 mt-1">14번 워치리스트에 추가 후 배치 실행 시 분석됩니다.</p>
+      <p className="text-gray-400 text-sm">SEC 파일링 없음</p>
+      <p className="text-xs text-gray-300 mt-1">EDGAR에 등록된 파일링이 없거나 티커를 찾을 수 없습니다.</p>
     </div>
   );
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-gray-400">최근 {filings.length}건 · AI 분석 (Groq llama-3.3-70b)</p>
+      <p className="text-xs text-gray-400">최근 {filings.length}건 · EDGAR 원문 링크 포함</p>
       {filings.map((f) => <FilingCard key={f.id} filing={f} />)}
     </div>
   );

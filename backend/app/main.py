@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes.analyze import router as analyze_router
+from app.routes.sec import router as sec_router
 from app.routes.supply import router as supply_router
 
 app = FastAPI(title="텐배거스코어링 API", version="0.1.0")
@@ -27,6 +28,7 @@ app.add_middleware(
 
 app.include_router(analyze_router)
 app.include_router(supply_router)
+app.include_router(sec_router)
 
 
 @app.get("/health")
