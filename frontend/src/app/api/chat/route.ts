@@ -149,8 +149,8 @@ export async function POST(req: NextRequest) {
   const lastUserMsg = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
   const dbContext = await buildContext(lastUserMsg).catch(() => "컨텍스트 로드 실패");
 
-  const systemPrompt = `You are a stock supply-demand analysis assistant for Korean retail investors.
-CRITICAL: You MUST respond ONLY in Korean (한국어). Never use English, Vietnamese, or any other language. Every single word must be Korean.
+  const systemPrompt = `You are a Korean stock analysis assistant.
+LANGUAGE RULE: Write ONLY in Korean (한국어). Do NOT use Chinese characters (漢字/中文), Vietnamese, Japanese, or any non-Korean script. Ticker symbols like AAPL, TEM are acceptable as-is. All other text must be pure Korean hangul.
 
 [DB 컨텍스트]
 ${dbContext}
@@ -158,9 +158,8 @@ ${dbContext}
 규칙:
 - DB에 없는 데이터는 "해당 데이터가 없습니다"라고 명시
 - 투자 권유·매수/매도 추천 금지
-- 수급 데이터 해석 및 사실 기반 분석만 제공
-- 간결하고 명확하게 답변 (3~5문장 이내 권장)
-- 반드시 한국어로만 답변. 영어·베트남어·기타 언어 절대 혼용 금지`;
+- 수급 데이터와 스코어링 데이터를 함께 해석하여 답변
+- 간결하고 명확하게 답변 (3~5문장 이내 권장)`;
 
   const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
