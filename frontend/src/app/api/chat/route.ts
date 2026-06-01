@@ -168,7 +168,7 @@ ${dbContext}
       Authorization: `Bearer ${groqKey}`,
     },
     body: JSON.stringify({
-      model: "llama-3.1-8b-instant",
+      model: "llama-3.3-70b-versatile",
       max_tokens: 600,
       stream: true,
       messages: [
@@ -201,7 +201,14 @@ ${dbContext}
           if (data === "[DONE]") continue;
           try {
             const json = JSON.parse(data);
-            const text = json.choices?.[0]?.delta?.content ?? "";
+            const raw = json.choices?.[0]?.delta?.content ?? "";
+            const text = raw
+              // CJK unified ideographs (Chinese/Japanese)
+              .replace(/[一-鿿぀-ヿ＀-￯㐀-䶿]+/g, "")
+              // Vietnamese diacritics not used in Korean (ắ,ổ,ẹ,ị etc)
+              .replace(/[Ạ-ỹ]/g, "")
+              // Lone English words (keep ALL-CAPS tickers and $numbers)
+              .replace(/(?<![A-Z0-9$%])([a-z]{2,})(?![a-z])/g, "");
             if (text) controller.enqueue(encoder.encode(text));
           } catch {}
         }
