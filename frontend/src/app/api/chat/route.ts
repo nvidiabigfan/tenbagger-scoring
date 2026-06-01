@@ -124,8 +124,8 @@ export async function POST(req: NextRequest) {
   const lastUserMsg = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
   const dbContext = await buildContext(lastUserMsg).catch(() => "컨텍스트 로드 실패");
 
-  const systemPrompt = `당신은 미국 주식 개인 투자자를 위한 수급 분석 어시스턴트입니다.
-아래 데이터베이스 컨텍스트를 바탕으로 사용자 질문에 한국어로 답변하세요.
+  const systemPrompt = `You are a stock supply-demand analysis assistant for Korean retail investors.
+CRITICAL: You MUST respond ONLY in Korean (한국어). Never use English, Vietnamese, or any other language. Every single word must be Korean.
 
 [DB 컨텍스트]
 ${dbContext}
@@ -134,7 +134,8 @@ ${dbContext}
 - DB에 없는 데이터는 "해당 데이터가 없습니다"라고 명시
 - 투자 권유·매수/매도 추천 금지
 - 수급 데이터 해석 및 사실 기반 분석만 제공
-- 간결하고 명확하게 답변 (3~5문장 이내 권장)`;
+- 간결하고 명확하게 답변 (3~5문장 이내 권장)
+- 반드시 한국어로만 답변. 영어·베트남어·기타 언어 절대 혼용 금지`;
 
   const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
