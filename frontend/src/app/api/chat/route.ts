@@ -11,6 +11,11 @@ function getSupplySupabase() {
   return createClient(url, key);
 }
 
+function fmtPct(v: number | null | undefined): string {
+  if (v == null) return "N/A";
+  return `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
+}
+
 async function buildContext(question: string): Promise<string> {
   const sb = getSupplySupabase();
   const parts: string[] = [];
@@ -21,14 +26,14 @@ async function buildContext(question: string): Promise<string> {
   if (tickers.length === 0) {
     const { data: snaps } = await sb
       .from("supply_snapshots")
-      .select("ticker, snapshot_date, close_price, short_interest_pct, volume_vs_avg, institutional_net")
+      .select("ticker, snapshot_date, close_price, price_change_1m_pct, price_change_1w_pct, short_interest_pct, volume_vs_avg, institutional_net")
       .order("snapshot_date", { ascending: false })
       .limit(10);
     if (snaps?.length) {
       parts.push("=== 최근 수급 스냅샷 ===");
       parts.push(
         snaps.map((s) =>
-          `${s.ticker}: 종가 $${s.close_price?.toFixed(2) ?? "N/A"}, 공매도 ${s.short_interest_pct?.toFixed(1) ?? "N/A"}%, 거래량배수 ${s.volume_vs_avg?.toFixed(2) ?? "N/A"}x, 기관순매수 $${((s.institutional_net ?? 0) / 1e6).toFixed(1)}M (${s.snapshot_date})`
+          `${s.ticker}: 종가 $${s.close_price?.toFixed(2) ?? "N/A"} (전월대비 ${fmtPct(s.price_change_1m_pct)}, 전주대비 ${fmtPct(s.price_change_1w_pct)}), 공매도 ${s.short_interest_pct?.toFixed(1) ?? "N/A"}%, 거래량배수 ${s.volume_vs_avg?.toFixed(2) ?? "N/A"}x, 기관순매수 $${((s.institutional_net ?? 0) / 1e6).toFixed(1)}M (${s.snapshot_date})`
         ).join("\n")
       );
     }
@@ -38,7 +43,7 @@ async function buildContext(question: string): Promise<string> {
   for (const ticker of tickers) {
     const [{ data: snaps }, { data: arRows }, { data: sec }] = await Promise.all([
       sb.from("supply_snapshots")
-        .select("snapshot_date, close_price, short_interest_pct, pc_ratio, volume_vs_avg, institutional_net, insider_net")
+        .select("snapshot_date, close_price, price_change_1m_pct, price_change_1w_pct, short_interest_pct, pc_ratio, volume_vs_avg, institutional_net, insider_net")
         .eq("ticker", ticker)
         .order("snapshot_date", { ascending: false })
         .limit(5),
@@ -57,6 +62,10 @@ async function buildContext(question: string): Promise<string> {
 
     if (snaps?.length) {
       parts.push(`\n=== ${ticker} 수급 데이터 (최근 ${snaps.length}일) ===`);
+      const latest = snaps[0];
+      if (latest.price_change_1m_pct != null || latest.price_change_1w_pct != null) {
+        parts.push(`가격변동: 전월대비 ${fmtPct(latest.price_change_1m_pct)}, 전주대비 ${fmtPct(latest.price_change_1w_pct)} (${latest.snapshot_date} 기준)`);
+      }
       parts.push(
         snaps.map((s) =>
           `${s.snapshot_date}: 종가 $${s.close_price?.toFixed(2) ?? "N/A"}, 공매도 ${s.short_interest_pct?.toFixed(1) ?? "N/A"}%, 거래량배수 ${s.volume_vs_avg?.toFixed(2) ?? "N/A"}x, P/C ${s.pc_ratio?.toFixed(2) ?? "N/A"}, 기관 $${((s.institutional_net ?? 0) / 1e6).toFixed(1)}M, 내부자 $${((s.insider_net ?? 0) / 1e6).toFixed(1)}M`

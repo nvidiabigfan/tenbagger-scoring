@@ -31,6 +31,8 @@ def collect_supply(ticker: str) -> dict:
         "ticker": ticker,
         "snapshot_date": today,
         "close_price": None,
+        "price_change_1m_pct": None,
+        "price_change_1w_pct": None,
         "short_interest_pct": None,
         "volume_vs_avg": None,
         "pc_ratio": None,
@@ -44,7 +46,19 @@ def collect_supply(ticker: str) -> dict:
         yf_t = yf.Ticker(ticker)
         hist = yf_t.history(period="30d", auto_adjust=True)
         if not hist.empty:
-            result["close_price"] = round(float(hist["Close"].iloc[-1]), 4)
+            closes = hist["Close"]
+            last_close = float(closes.iloc[-1])
+            result["close_price"] = round(last_close, 4)
+            # 전월대비: 30일 윈도우 첫날(약 1개월 전) 종가 대비
+            if len(closes) >= 2:
+                first_close = float(closes.iloc[0])
+                if first_close > 0:
+                    result["price_change_1m_pct"] = round((last_close / first_close - 1) * 100, 2)
+            # 전주대비: 5거래일 전 종가 대비
+            if len(closes) >= 6:
+                week_ago = float(closes.iloc[-6])
+                if week_ago > 0:
+                    result["price_change_1w_pct"] = round((last_close / week_ago - 1) * 100, 2)
             avg_vol = float(hist["Volume"].tail(20).mean())
             cur_vol = float(hist["Volume"].iloc[-1])
             if avg_vol > 0:
