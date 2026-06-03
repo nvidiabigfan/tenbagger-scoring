@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+// 서버사이드 전용 라우트 — SERVICE 키로 조회(신규 테이블 RLS 우회, 클라이언트 미노출)
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_KEY!
 );
 
 export const revalidate = 3600;
