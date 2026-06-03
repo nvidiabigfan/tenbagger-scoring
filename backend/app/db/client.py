@@ -139,6 +139,37 @@ def save_supply_snapshot(data: dict) -> None:
     ).execute()
 
 
+def get_congress_netbuy(ticker: str, since_days: int = 90) -> dict:
+    """티커별 최근 의회(상·하원) 순매수 집계.
+
+    congress_trades 테이블에서 since_days 윈도우의 거래를 모아
+    매수/매도/순매수/참여 의원수 + 매수의원 평균 초과수익(track record)을 반환.
+    데이터 없으면 trades=0 으로 graceful (analyzer가 confidence=0 처리).
+    """
+    cutoff = (datetime.now(timezone.utc).date() - timedelta(days=since_days)).isoformat()
+    res = (
+        _get_client()
+        .table("congress_trades")
+        .select("side, bioguide_id, excess_return")
+        .eq("ticker", ticker)
+        .gte("transaction_date", cutoff)
+        .execute()
+    )
+    rows = res.data or []
+    buys = sum(1 for r in rows if r.get("side") == "buy")
+    sells = sum(1 for r in rows if r.get("side") == "sell")
+    buy_reps = {r.get("bioguide_id") for r in rows if r.get("side") == "buy" and r.get("bioguide_id")}
+    excess = [r["excess_return"] for r in rows if r.get("side") == "buy" and r.get("excess_return") is not None]
+    return {
+        "trades": len(rows),
+        "buys": buys,
+        "sells": sells,
+        "net": buys - sells,
+        "buy_reps": len(buy_reps),
+        "avg_excess_return": round(sum(excess) / len(excess), 2) if excess else None,
+    }
+
+
 def _build_report(result: EngineResult) -> str:
     signal_display = {
         "strong_buy": "강한 주목 시그널",

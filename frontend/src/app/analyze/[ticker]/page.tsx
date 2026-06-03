@@ -163,6 +163,7 @@ const MODULE_LABEL: Record<string, string> = {
   momentum: "주가 모멘텀",
   buzz:     "Wikipedia 관심 증가",
   insider:  "내부자 거래",
+  congress: "의회 순매수",
   trends:   "Google Trends 지속성",
   youtube:  "YouTube 주목도",
 };
@@ -174,7 +175,8 @@ const MODULE_WEIGHT: Record<string, number> = {
   size:     15,
   momentum: 10,
   buzz:     10,
-  insider:  5,
+  insider:  3,
+  congress: 2,
   trends:   15,
   youtube:  10,
 };
@@ -262,6 +264,14 @@ const KEY_LABEL: Record<string, string> = {
   insider_trans_pct:      "내부자 순매수 (Insider Trans %)",
   insider_own_pct:        "내부자 보유율 (Insider Own %)",
   insider_own:            "내부자 보유 (Insider Own)",
+
+  // ── Congress (의회 매매) ─────────────────────────
+  net_buy:                "의회 순매수 (매수-매도)",
+  buys:                   "매수 건수 (Buys)",
+  sells:                  "매도 건수 (Sells)",
+  buy_reps:               "매수 의원 수 (Buy Reps)",
+  avg_excess_return_pct:  "매수의원 평균 초과수익 (Avg Excess Return %)",
+  window_days:            "집계 기간 (일)",
 
   // ── Trends ───────────────────────────────────────
   rate_3m:                "Trends 3개월 변화율 (Rate 3M)",

@@ -24,8 +24,12 @@ modules:
     enabled: true    # Wikipedia 페이지뷰 기반 관심 증가
 
   insider:
-    weight: 5
+    weight: 3
     enabled: true    # 내부자 거래 — Finviz Insider Trans (Form 4 기반)
+
+  congress:
+    weight: 2
+    enabled: true    # 의회(상·하원) 순매수 — STOCK Act 공시 기반(후행 확인지표)
 
 scoring:
   strong_buy_threshold: 75

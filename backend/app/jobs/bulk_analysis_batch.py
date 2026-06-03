@@ -19,6 +19,7 @@ load_dotenv()
 
 from app.analyzers.analyst import AnalystAnalyzer
 from app.analyzers.buzz import BuzzAnalyzer
+from app.analyzers.congress import CongressAnalyzer
 from app.analyzers.etf import EtfAnalyzer
 from app.analyzers.insider import InsiderAnalyzer
 from app.analyzers.momentum import MomentumAnalyzer
@@ -109,6 +110,7 @@ def run() -> None:
     engine = ScoringEngine([
         RevenueAccelerationAnalyzer(), EtfAnalyzer(), AnalystAnalyzer(),
         SizeAnalyzer(), MomentumAnalyzer(), BuzzAnalyzer(), InsiderAnalyzer(),
+        CongressAnalyzer(),
     ])
 
     ok = fail = skipped = 0
