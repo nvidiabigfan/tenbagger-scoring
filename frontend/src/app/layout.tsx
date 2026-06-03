@@ -24,6 +24,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/ranking" className="text-sm text-gray-500 hover:text-gray-900">
                 랭킹보드
               </Link>
+              <Link href="/congress" className="text-sm text-gray-500 hover:text-gray-900">
+                의회매매
+              </Link>
               <NavAuth />
             </div>
           </div>
