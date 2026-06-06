@@ -130,12 +130,15 @@ async def _fetch(ticker: str) -> list[dict]:
         dates = recent.get("filingDate", [])
         accs = recent.get("accessionNumber", [])
         periods = recent.get("reportDate", [])
+        items_list = recent.get("items", [])
 
-        for form, date_, acc, period in zip(forms, dates, accs, periods):
+        for i, (form, date_, acc, period) in enumerate(zip(forms, dates, accs, periods)):
             if form not in _TARGET_FORMS:
                 continue
             acc_clean = acc.replace("-", "")
             edgar_url = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{acc_clean}/{acc}-index.htm"
+            raw_items = items_list[i] if i < len(items_list) else ""
+            items = [x.strip() for x in raw_items.split(",") if x.strip()] if raw_items else []
             filings.append({
                 "id": acc,
                 "ticker": ticker,
@@ -143,6 +146,7 @@ async def _fetch(ticker: str) -> list[dict]:
                 "filed_date": date_,
                 "report_period": period or None,
                 "edgar_url": edgar_url,
+                "items": items,
                 "ai_summary": None,
                 "risk_flags": None,
                 "analyzed_at": None,

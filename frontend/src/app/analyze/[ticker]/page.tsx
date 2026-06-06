@@ -44,8 +44,11 @@ function growthLabel(topPct: number, delta: number | null) {
 function Sparkline({ data }: { data: number[] }) {
   const W = 240, H = 40, PAD = 3;
   const scores = data.map((d) => d);
-  const min = Math.min(...scores, 0);
-  const max = Math.max(...scores, 1);
+  const dataMin = Math.min(...scores);
+  const dataMax = Math.max(...scores);
+  const pad5 = Math.max((dataMax - dataMin) * 0.15, 5);
+  const min = Math.max(0, dataMin - pad5);
+  const max = Math.min(100, dataMax + pad5);
   const range = max - min || 1;
   const toY = (v: number) => PAD + (H - PAD * 2) * (1 - (v - min) / range);
   const toX = (i: number) => scores.length < 2 ? W / 2 : (i / (scores.length - 1)) * W;

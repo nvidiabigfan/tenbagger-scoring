@@ -17,10 +17,33 @@ interface SecFiling {
   filed_date: string;
   report_period: string | null;
   edgar_url: string | null;
+  items: string[] | null;
   ai_summary: AiSummary | null;
   risk_flags: string[] | null;
   analyzed_at: string | null;
 }
+
+const ITEM_LABEL: Record<string, string> = {
+  "1.01": "중요 계약 체결",
+  "1.02": "중요 계약 종료",
+  "1.03": "파산·회생",
+  "2.01": "자산 취득·처분",
+  "2.02": "실적 발표",
+  "2.03": "직접 금융채무 발생",
+  "2.05": "구조조정 비용",
+  "2.06": "자산손상",
+  "3.01": "상장폐지 통보",
+  "3.02": "미등록 주식 발행",
+  "4.01": "감사인 변경",
+  "4.02": "재무제표 신뢰불가",
+  "5.01": "지배구조 변경",
+  "5.02": "임원 변동",
+  "5.03": "정관 개정",
+  "5.07": "주주총회 결의",
+  "7.01": "Reg FD 공시",
+  "8.01": "기타 이벤트",
+  "9.01": "재무제표·첨부",
+};
 
 const RISK_LABEL: Record<string, string> = {
   revenue_decline: "매출 감소",
@@ -48,6 +71,7 @@ function FilingCard({ filing }: { filing: SecFiling }) {
   const [open, setOpen] = useState(false);
   const s = filing.ai_summary;
   const flags = filing.risk_flags ?? [];
+  const items = filing.items ?? [];
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-2">
@@ -76,6 +100,17 @@ function FilingCard({ filing }: { filing: SecFiling }) {
           </span>
         )}
       </div>
+
+      {/* 8-K Item 제목 */}
+      {items.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {items.map((item) => (
+            <span key={item} className="text-[10px] px-2 py-0.5 rounded-full border bg-gray-50 border-gray-200 text-gray-500">
+              {item} {ITEM_LABEL[item] ? `· ${ITEM_LABEL[item]}` : ""}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* 리스크 플래그 뱃지 */}
       {flags.length > 0 && (

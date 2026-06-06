@@ -1,6 +1,55 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+function TradingViewChart({ ticker }: { ticker: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    container.innerHTML = "";
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "tradingview-widget-container__widget";
+    container.appendChild(wrapper);
+
+    const script = document.createElement("script");
+    script.src =
+      "https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js";
+    script.async = true;
+    script.innerHTML = JSON.stringify({
+      symbols: [[ticker, `${ticker}|1D`]],
+      chartOnly: true,
+      width: "100%",
+      height: 220,
+      locale: "kr",
+      colorTheme: "light",
+      autosize: true,
+      showVolume: false,
+      hideDateRanges: false,
+      hideMarketStatus: true,
+      scalePosition: "right",
+      scaleMode: "Normal",
+      lineWidth: 2,
+      lineType: 0,
+      dateRanges: ["1m|30", "3m|60", "12m|1D", "60m|1W"],
+      changeMode: "price-and-percent",
+      chartType: "line",
+    });
+    container.appendChild(script);
+
+    return () => { container.innerHTML = ""; };
+  }, [ticker]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="tradingview-widget-container w-full rounded-xl overflow-hidden border border-gray-100"
+      style={{ height: 220 }}
+    />
+  );
+}
 
 const SUPPLY_API = "/api/supply";
 
@@ -166,6 +215,9 @@ export default function SupplyTab({ ticker }: { ticker: string }) {
 
   return (
     <div className="space-y-3">
+      {/* 가격 차트 */}
+      <TradingViewChart ticker={ticker} />
+
       {/* 메트릭 카드 */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         <MetricCard

@@ -27,13 +27,25 @@ export async function GET(
     }
 
     const currentScore = history[0].total_score;
-    const latestWeek = history[0].week_date;
 
-    // 같은 주차 전 종목 점수 → 분위수
+    // 종목 수가 가장 많은 week_date 기준으로 분위수 계산 (DELL 등 일부 종목이 최신 주차에만 있으면 분위수 왜곡)
+    const { data: weekCounts } = await supabase
+      .from("score_history")
+      .select("week_date")
+      .order("week_date", { ascending: false })
+      .limit(2000);
+
+    const countByWeek: Record<string, number> = {};
+    for (const r of weekCounts ?? []) {
+      countByWeek[r.week_date] = (countByWeek[r.week_date] ?? 0) + 1;
+    }
+    const referenceWeek = Object.entries(countByWeek).sort((a, b) => b[1] - a[1])[0]?.[0]
+      ?? history[0].week_date;
+
     const { data: allWeek } = await supabase
       .from("score_history")
       .select("total_score")
-      .eq("week_date", latestWeek);
+      .eq("week_date", referenceWeek);
 
     const allScores = (allWeek ?? []).map((r) => Number(r.total_score));
     const below = allScores.filter((s) => s < currentScore).length;
