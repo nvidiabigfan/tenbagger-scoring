@@ -77,22 +77,27 @@ function FilingCard({ filing }: { filing: SecFiling }) {
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-2">
       {/* 헤더 */}
       <div className="flex items-start justify-between gap-2">
-        <div>
+        <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
           <span className="font-semibold text-gray-800 text-sm">{filing.form_type}</span>
-          <span className="text-xs text-gray-400 ml-2">{filing.filed_date}</span>
+          <span className="text-xs text-gray-400">{filing.filed_date}</span>
           {filing.report_period && (
-            <span className="text-xs text-gray-300 ml-1">({filing.report_period} 기준)</span>
+            <span className="text-xs text-gray-300">({filing.report_period} 기준)</span>
           )}
           {filing.edgar_url && (
             <a
               href={filing.edgar_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[10px] text-blue-400 hover:text-blue-600 ml-2"
+              className="text-[10px] text-blue-400 hover:text-blue-600"
             >
               EDGAR ↗
             </a>
           )}
+          {items.map((item) => (
+            <span key={item} className="text-[10px] px-2 py-0.5 rounded-full border bg-gray-50 border-gray-200 text-gray-500">
+              {item}{ITEM_LABEL[item] ? ` · ${ITEM_LABEL[item]}` : ""}
+            </span>
+          ))}
         </div>
         {flags.length > 0 && (
           <span className="text-xs bg-red-50 border border-red-200 text-red-500 rounded-full px-2 py-0.5 shrink-0">
@@ -100,17 +105,6 @@ function FilingCard({ filing }: { filing: SecFiling }) {
           </span>
         )}
       </div>
-
-      {/* 8-K Item 제목 */}
-      {items.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {items.map((item) => (
-            <span key={item} className="text-[10px] px-2 py-0.5 rounded-full border bg-gray-50 border-gray-200 text-gray-500">
-              {item} {ITEM_LABEL[item] ? `· ${ITEM_LABEL[item]}` : ""}
-            </span>
-          ))}
-        </div>
-      )}
 
       {/* 리스크 플래그 뱃지 */}
       {flags.length > 0 && (
