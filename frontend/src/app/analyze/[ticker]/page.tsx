@@ -46,9 +46,9 @@ function Sparkline({ data }: { data: number[] }) {
   const scores = data.map((d) => d);
   const dataMin = Math.min(...scores);
   const dataMax = Math.max(...scores);
-  const pad5 = Math.max((dataMax - dataMin) * 0.15, 5);
-  const min = Math.max(0, dataMin - pad5);
-  const max = Math.min(100, dataMax + pad5);
+  const pad = Math.max((dataMax - dataMin) * 0.5, 0.5);
+  const min = Math.max(0, dataMin - pad);
+  const max = Math.min(100, dataMax + pad);
   const range = max - min || 1;
   const toY = (v: number) => PAD + (H - PAD * 2) * (1 - (v - min) / range);
   const toX = (i: number) => scores.length < 2 ? W / 2 : (i / (scores.length - 1)) * W;
@@ -115,8 +115,8 @@ function GrowthContextCard({ ctx }: { ctx: GrowthContext }) {
           <Sparkline data={scores} />
           {weeks.length >= 2 && (
             <div className="flex justify-between text-[9px] text-gray-300 mt-0.5 w-full">
-              <span>{weeks[0]}</span>
-              <span>{weeks[weeks.length - 1]}</span>
+              <span>{weeks[0]} <span className="text-gray-400 font-medium">{scores[0].toFixed(1)}</span></span>
+              <span><span className="text-gray-400 font-medium">{scores[scores.length - 1].toFixed(1)}</span> {weeks[weeks.length - 1]}</span>
             </div>
           )}
         </div>
