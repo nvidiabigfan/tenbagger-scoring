@@ -170,6 +170,39 @@ def get_congress_netbuy(ticker: str, since_days: int = 90) -> dict:
     }
 
 
+def get_debate_score(ticker: str) -> float | None:
+    """debates 테이블에서 생성 시점 총점 조회 (없으면 None)."""
+    res = (
+        _get_client()
+        .table("debates")
+        .select("score_at_gen")
+        .eq("ticker", ticker)
+        .maybe_single()
+        .execute()
+    )
+    return float(res.data["score_at_gen"]) if res.data else None
+
+
+def upsert_debate(
+    ticker: str,
+    bull_text: str,
+    bear_text: str,
+    score_at_gen: float,
+    signal_at_gen: str | None = None,
+) -> None:
+    """강세·약세 토론 upsert (ticker PK, 최신 1건 유지)."""
+    _get_client().table("debates").upsert(
+        {
+            "ticker": ticker,
+            "bull_text": bull_text,
+            "bear_text": bear_text,
+            "score_at_gen": score_at_gen,
+            "signal_at_gen": signal_at_gen,
+        },
+        on_conflict="ticker",
+    ).execute()
+
+
 def _build_report(result: EngineResult) -> str:
     signal_display = {
         "strong_buy": "강한 주목 시그널",

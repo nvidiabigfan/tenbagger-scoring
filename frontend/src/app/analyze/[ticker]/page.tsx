@@ -9,13 +9,15 @@ import dynamic from "next/dynamic";
 const SupplyTab = dynamic(() => import("@/components/SupplyTab"), { ssr: false });
 const SecReportTab = dynamic(() => import("@/components/SecReportTab"), { ssr: false });
 const ChatTab = dynamic(() => import("@/components/ChatTab"), { ssr: false });
+const DebateTab = dynamic(() => import("@/components/DebateTab"), { ssr: false });
 
-type TabKey = "score" | "supply" | "sec" | "chat";
+type TabKey = "score" | "supply" | "sec" | "chat" | "debate";
 const TABS: { key: TabKey; label: string }[] = [
   { key: "score", label: "성장점수" },
   { key: "supply", label: "수급" },
   { key: "sec", label: "SEC 리포트" },
   { key: "chat", label: "AI Q&A" },
+  { key: "debate", label: "강세 vs 약세" },
 ];
 
 interface GrowthContext {
@@ -593,6 +595,13 @@ export default function AnalyzePage() {
       {activeTab === "supply" && <SupplyTab ticker={result.ticker} />}
       {activeTab === "sec" && <SecReportTab ticker={result.ticker} />}
       {activeTab === "chat" && <ChatTab ticker={result.ticker} />}
+      {activeTab === "debate" && (
+        <DebateTab
+          ticker={result.ticker}
+          inWatchlist={inWatchlist}
+          onAddWatchlist={toggleWatchlist}
+        />
+      )}
 
       <p className="text-center text-xs text-gray-300 mt-4 mb-2">
         본 서비스는 투자 자문이 아니며 참고용입니다.
