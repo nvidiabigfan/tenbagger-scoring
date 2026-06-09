@@ -160,9 +160,13 @@ def run() -> None:
     ok = fail = cached = 0
     for ticker in tickers:
         if db.get_recent_analysis(ticker):
-            log.info("[%s] 캐시 히트 — 스킵", ticker)
-            cached += 1
-            continue
+            # 토론이 없으면 캐시 히트여도 분석 재실행해서 첫 토론 생성
+            if db.get_debate_score(ticker) is None:
+                log.info("[%s] 캐시 히트이지만 토론 없음 — 분석 재실행", ticker)
+            else:
+                log.info("[%s] 캐시 히트 — 스킵", ticker)
+                cached += 1
+                continue
 
         # 분석 전 이전 점수 기록
         old_score_pre = _get_previous_score(ticker)

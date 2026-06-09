@@ -177,10 +177,12 @@ def get_debate_score(ticker: str) -> float | None:
         .table("debates")
         .select("score_at_gen")
         .eq("ticker", ticker)
-        .maybe_single()
+        .limit(1)
         .execute()
     )
-    return float(res.data["score_at_gen"]) if res.data else None
+    if res and res.data:
+        return float(res.data[0]["score_at_gen"])
+    return None
 
 
 def upsert_debate(
@@ -198,9 +200,78 @@ def upsert_debate(
             "bear_text": bear_text,
             "score_at_gen": score_at_gen,
             "signal_at_gen": signal_at_gen,
+            "model": "groq+gemini",
         },
         on_conflict="ticker",
     ).execute()
+
+
+# ── 멀티에이전트 토론 세션/라운드/판정 ──────────────────────────────────────
+
+def create_debate_session(
+    session_id: str,
+    ticker: str,
+    score_at_gen: float,
+    signal_at_gen: str | None = None,
+    total_rounds: int = 2,
+) -> None:
+    _get_client().table("debate_sessions").insert({
+        "id": session_id,
+        "ticker": ticker,
+        "total_rounds": total_rounds,
+        "status": "running",
+        "score_at_gen": score_at_gen,
+        "signal_at_gen": signal_at_gen,
+    }).execute()
+
+
+def save_debate_round(
+    session_id: str,
+    round_no: int,
+    bull_agent: str,
+    bear_agent: str,
+    bull_text: str,
+    bear_text: str,
+) -> None:
+    _get_client().table("debate_rounds").insert({
+        "session_id": session_id,
+        "round_no": round_no,
+        "bull_agent": bull_agent,
+        "bear_agent": bear_agent,
+        "bull_text": bull_text,
+        "bear_text": bear_text,
+    }).execute()
+
+
+def save_debate_verdict(
+    session_id: str,
+    judge_agent: str,
+    verdict_text: str,
+    bull_score: int,
+    bear_score: int,
+    recommendation: str,
+) -> None:
+    _get_client().table("debate_verdicts").insert({
+        "session_id": session_id,
+        "judge_agent": judge_agent,
+        "verdict_text": verdict_text,
+        "bull_score": bull_score,
+        "bear_score": bear_score,
+        "recommendation": recommendation,
+    }).execute()
+
+
+def complete_debate_session(session_id: str) -> None:
+    _get_client().table("debate_sessions").update({
+        "status": "completed",
+        "completed_at": "now()",
+    }).eq("id", session_id).execute()
+
+
+def fail_debate_session(session_id: str) -> None:
+    _get_client().table("debate_sessions").update({
+        "status": "failed",
+    }).eq("id", session_id).execute()
 
 
 def _build_report(result: EngineResult) -> str:

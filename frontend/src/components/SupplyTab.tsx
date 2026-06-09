@@ -18,7 +18,7 @@ function TradingViewChart({ ticker }: { ticker: string }) {
     script.src =
       "https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js";
     script.async = true;
-    script.innerHTML = JSON.stringify({
+    script.textContent = JSON.stringify({
       symbols: [[ticker, `${ticker}|1D`]],
       chartOnly: true,
       width: "100%",
@@ -194,15 +194,18 @@ export default function SupplyTab({ ticker }: { ticker: string }) {
   );
 
   if (error) return (
-    <div className="text-center pt-8 space-y-3">
-      <p className="text-gray-500 text-sm">{error}</p>
-      <button
-        onClick={collect}
-        disabled={collecting}
-        className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
-      >
-        {collecting ? "수집 중..." : "수급 데이터 수집"}
-      </button>
+    <div className="space-y-3">
+      <TradingViewChart ticker={ticker} />
+      <div className="text-center pt-4 space-y-3">
+        <p className="text-gray-500 text-sm">{error}</p>
+        <button
+          onClick={collect}
+          disabled={collecting}
+          className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        >
+          {collecting ? "수집 중..." : "수급 데이터 수집"}
+        </button>
+      </div>
     </div>
   );
 

@@ -41,6 +41,9 @@ export default function WatchlistPage() {
   const [user, setUser] = useState<User | null>(null);
   const [items, setItems] = useState<WatchItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [addTicker, setAddTicker] = useState("");
+  const [addError, setAddError] = useState("");
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -96,6 +99,35 @@ export default function WatchlistPage() {
     setItems((prev) => prev.filter((i) => i.ticker !== ticker));
   };
 
+  const add = async () => {
+    const t = addTicker.trim().toUpperCase();
+    if (!/^[A-Z.]{1,5}$/.test(t)) {
+      setAddError("티커는 영문 대문자 1~5자 (예: AAPL, BRK.B)");
+      return;
+    }
+    if (items.some((i) => i.ticker === t)) {
+      setAddError("이미 워치리스트에 있습니다.");
+      return;
+    }
+    setAdding(true);
+    setAddError("");
+    const { error } = await supabase.from("watchlist").upsert(
+      { user_id: user!.id, ticker: t, alert_enabled: true, alert_threshold: 10.0 },
+      { onConflict: "user_id,ticker" }
+    );
+    if (error) {
+      setAddError("추가 실패: " + error.message);
+      setAdding(false);
+      return;
+    }
+    setItems((prev) => [
+      { ticker: t, added_at: new Date().toISOString(), alert_enabled: true, stocks: null, score: null, analyzed_at: null },
+      ...prev,
+    ]);
+    setAddTicker("");
+    setAdding(false);
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center pt-20">
@@ -117,12 +149,35 @@ export default function WatchlistPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">내 워치리스트</h1>
           <p className="text-xs text-gray-400 mt-0.5">점수 높은 순 정렬</p>
         </div>
         <span className="text-sm text-gray-400">{items.length}개 종목</span>
+      </div>
+
+      {/* 티커 추가 폼 */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3 mb-6">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={addTicker}
+            onChange={(e) => { setAddTicker(e.target.value.toUpperCase()); setAddError(""); }}
+            onKeyDown={(e) => e.key === "Enter" && add()}
+            placeholder="티커 입력 (예: AAPL)"
+            maxLength={5}
+            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:border-blue-400"
+          />
+          <button
+            onClick={add}
+            disabled={adding || !addTicker.trim()}
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {adding ? "추가 중…" : "추가"}
+          </button>
+        </div>
+        {addError && <p className="text-xs text-red-500 mt-1.5">{addError}</p>}
       </div>
 
       {items.length === 0 ? (
