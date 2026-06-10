@@ -25,7 +25,6 @@ from app.analyzers.revenue import RevenueAccelerationAnalyzer
 from app.analyzers.size import SizeAnalyzer
 from app.core.email import send_score_alert
 from app.db import client as db
-from app.jobs.debate import generate_debate
 from app.scoring.engine import ScoringEngine
 
 logging.basicConfig(level=logging.INFO)
@@ -33,7 +32,6 @@ log = logging.getLogger(__name__)
 
 _INTER_STOCK_SLEEP = 8.0
 _DEFAULT_ALERT_THRESHOLD = 10.0  # 점수 변화 기본 임계값
-_DEBATE_REGEN_THRESHOLD = 5.0   # 토론 재생성 임계값 (알림 임계값과 별도)
 
 
 def _supabase():
@@ -96,25 +94,6 @@ def _save_alert_history(
         log.error("alert_history 저장 실패 (%s): %s", ticker, e)
 
 
-def _maybe_regen_debate(ticker: str, result) -> None:
-    """점수 변동 ≥5점 또는 토론 없음일 때만 Groq 호출 후 upsert. 실패 시 graceful."""
-    try:
-        prev_score = db.get_debate_score(ticker)
-        changed = (prev_score is None) or (abs(result.total_score - prev_score) >= _DEBATE_REGEN_THRESHOLD)
-        if not changed:
-            log.info("[%s] 토론 재생성 스킵 (Δscore=%.1f < %.1f)", ticker,
-                     abs(result.total_score - prev_score), _DEBATE_REGEN_THRESHOLD)
-            return
-        bull, bear = generate_debate(ticker, result)
-        if bull and bear:
-            db.upsert_debate(ticker, bull, bear, result.total_score, result.signal)
-            log.info("[%s] 토론 upsert 완료", ticker)
-        else:
-            log.warning("[%s] 토론 생성 빈 결과 — 기존 유지", ticker)
-    except Exception as e:
-        log.error("[%s] maybe_regen_debate 예외 (기존 토론 유지): %s", ticker, e)
-
-
 def _send_alerts(
     ticker: str,
     new_score: float,
@@ -160,13 +139,9 @@ def run() -> None:
     ok = fail = cached = 0
     for ticker in tickers:
         if db.get_recent_analysis(ticker):
-            # 토론이 없으면 캐시 히트여도 분석 재실행해서 첫 토론 생성
-            if db.get_debate_score(ticker) is None:
-                log.info("[%s] 캐시 히트이지만 토론 없음 — 분석 재실행", ticker)
-            else:
-                log.info("[%s] 캐시 히트 — 스킵", ticker)
-                cached += 1
-                continue
+            log.info("[%s] 캐시 히트 — 스킵", ticker)
+            cached += 1
+            continue
 
         # 분석 전 이전 점수 기록
         old_score_pre = _get_previous_score(ticker)
@@ -178,9 +153,6 @@ def run() -> None:
             new_score = result.total_score
             log.info("[%s] 저장 완료 (score=%.1f)", ticker, new_score)
             ok += 1
-
-            # 토론 재생성 (graceful — 실패해도 배치 계속)
-            _maybe_regen_debate(ticker, result)
 
             # 알림 발송
             if old_score_pre is not None:
