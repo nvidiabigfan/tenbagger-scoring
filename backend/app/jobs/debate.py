@@ -23,8 +23,9 @@ log = logging.getLogger(__name__)
 _GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 _GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
 _GROQ_MODEL = "llama-3.3-70b-versatile"
-_GEMINI_MODEL = "gemini-2.0-flash"
+_GEMINI_MODEL = "gemini-2.5-flash"
 _MAX_TOKENS_DEBATE = 600
+_MAX_TOKENS_GEMINI = 4000   # thinking model — 내부 추론 토큰 포함
 _MAX_TOKENS_JUDGE = 500
 _TIMEOUT = 30.0
 
@@ -116,19 +117,26 @@ async def _call_groq(messages: list[dict], max_tokens: int = _MAX_TOKENS_DEBATE)
 
 
 async def _call_gemini(messages: list[dict]) -> str:
-    """Gemini 호출. GEMINI_API_KEY 미설정 시 Groq(약세 롤)로 fallback."""
+    """Gemini 호출. GEMINI_API_KEY 미설정 시 Groq fallback. 429 시 60s 후 1회 재시도."""
+    import asyncio as _asyncio
     api_key = os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
         log.warning("GEMINI_API_KEY 없음 — Groq fallback으로 약세 생성")
         return await _call_groq(messages)
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        resp = await client.post(
-            _GEMINI_URL,
-            json={"model": _GEMINI_MODEL, "max_tokens": _MAX_TOKENS_DEBATE, "messages": messages},
-            headers={"Authorization": f"Bearer {api_key}"},
-        )
-    resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"]
+    for attempt in range(2):
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.post(
+                _GEMINI_URL,
+                json={"model": _GEMINI_MODEL, "max_tokens": _MAX_TOKENS_GEMINI, "messages": messages},
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+        if resp.status_code == 429 and attempt == 0:
+            log.warning("Gemini 429 rate limit — 60s 대기 후 재시도")
+            await _asyncio.sleep(60)
+            continue
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
+    raise RuntimeError("Gemini 429 재시도 실패")
 
 
 def _parse_verdict(raw: str) -> dict:
